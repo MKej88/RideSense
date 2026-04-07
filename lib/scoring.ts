@@ -45,7 +45,10 @@ export function calculateBikeScore(hour: WeatherHourRaw): ScoredWeatherHour {
     reasons.push("moderat vind trekker ned");
   }
 
-  if (hour.windGust && hour.windGust >= SCORE_THRESHOLDS.gustPenaltyStart) {
+  if (
+    hour.windGust !== undefined &&
+    hour.windGust >= SCORE_THRESHOLDS.gustPenaltyStart
+  ) {
     score -= 12;
     reasons.push("vindkast gir uforutsigbare forhold");
   }
