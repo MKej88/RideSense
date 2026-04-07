@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useState } from "react";
 import { BestWindowCard } from "@/components/BestWindowCard";
+import { LocationMap } from "@/components/LocationMap";
 import { WeatherTable } from "@/components/WeatherTable";
 import { GeocodeResult, WeatherResponse } from "@/lib/types";
 
@@ -40,7 +41,7 @@ export default function HomePage() {
     }
   }
 
-  async function loadWeather(place: GeocodeResult): Promise<void> {
+  const loadWeather = useCallback(async (place: GeocodeResult): Promise<void> => {
     setLoading(true);
     setError(null);
     setSelected(place);
@@ -63,7 +64,20 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  const onMarkerMoved = useCallback(
+    async (lat: number, lon: number): Promise<void> => {
+      const movedPlace: GeocodeResult = {
+        name: "Valgt punkt på kart",
+        lat,
+        lon
+      };
+
+      await loadWeather(movedPlace);
+    },
+    [loadWeather]
+  );
 
   function useMyLocation(): void {
     setError(null);
@@ -150,6 +164,15 @@ export default function HomePage() {
 
       {loading && (
         <section className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Laster data …</section>
+      )}
+
+      {selected && (
+        <LocationMap
+          lat={selected.lat}
+          lon={selected.lon}
+          label={selected.name}
+          onMarkerMoved={onMarkerMoved}
+        />
       )}
 
       {weather && (

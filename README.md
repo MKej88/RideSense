@@ -20,12 +20,15 @@ RideSense er en produksjonsklar MVP bygget med Next.js som hjelper landeveissykl
 - Finner og viser `Beste tidspunkt i dag`.
 - Kort forklaring på hvorfor tidsvinduet er best.
 - Feilhåndtering, tomtilstand og enkel responsiv UI.
+- Interaktivt kart med OpenStreetMap-kartlag og flyttbar markør.
+- Automatisk oppdatering av vær og sykkelscore når markøren flyttes.
 
 ## Teknologi
 
 - Next.js (App Router)
 - TypeScript
 - Tailwind CSS
+- Leaflet lastet fra CDN (interaktiv kartvisning)
 - API-ruter på server-siden (`/api/geocode`, `/api/weather`)
 - Caching via `fetch(..., { next: { revalidate } })` og `Cache-Control`
 
@@ -77,6 +80,7 @@ app/
 
 components/
   BestWindowCard.tsx
+  LocationMap.tsx      # kart med flyttbar markør
   ScoreBadge.tsx
   WeatherTable.tsx
 
@@ -85,6 +89,14 @@ lib/
   types.ts                # delte typer/interfaces
   weather.ts              # datainnhenting/transformering av værdata
 ```
+
+
+## Kartløsning (nytt)
+
+- Kartkomponenten er skilt ut i `components/LocationMap.tsx` for å beholde arkitekturen.
+- Kartgrunnlaget kommer fra åpne OpenStreetMap-kartfliser (`tile.openstreetmap.org`).
+- Markøren kan dras til ny posisjon. Når brukeren slipper markøren, hentes nye værdata automatisk fra `/api/weather`, og sykkelscoren beregnes på nytt med eksisterende logikk.
+- Kartet er mobilvennlig med responsiv høyde (`h-72` på mobil, `h-96` på større skjermer).
 
 ## Scoringsmodell v1 (enkelt forklart)
 
