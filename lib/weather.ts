@@ -2,6 +2,7 @@ import { calculateBikeScore, findBestWindowToday } from "@/lib/scoring";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
 const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
+const MET_FETCH_TIMEOUT_MS = 4000;
 
 function asFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -48,12 +49,19 @@ export async function fetchForecastForLocation(
 ): Promise<WeatherResponse> {
   const url = `${MET_FORECAST_URL}?lat=${lat}&lon=${lon}`;
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
-    },
-    next: { revalidate: 600 }
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
+      },
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(MET_FETCH_TIMEOUT_MS)
+    });
+  } catch {
+    throw new Error("Værtjenesten svarte ikke raskt nok.");
+  }
 
   if (!response.ok) {
     throw new Error("Kunne ikke hente værdata fra MET API.");
