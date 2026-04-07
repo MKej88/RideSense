@@ -1,7 +1,22 @@
 import { calculateBikeScore, findBestWindowToday } from "@/lib/scoring";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
-const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/compact";
+const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
+
+function asFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
 
 function resolveWindGust(
   instantDetails: Record<string, unknown> | undefined,
@@ -17,8 +32,9 @@ function resolveWindGust(
   ];
 
   for (const candidate of gustCandidates) {
-    if (typeof candidate === "number" && Number.isFinite(candidate)) {
-      return candidate;
+    const gustValue = asFiniteNumber(candidate);
+    if (gustValue !== undefined) {
+      return gustValue;
     }
   }
 
