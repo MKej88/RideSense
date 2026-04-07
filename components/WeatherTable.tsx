@@ -38,7 +38,9 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
               <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
               <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
-              <td className="px-4 py-3">{hour.windGust ? `${hour.windGust.toFixed(1)} m/s` : "-"}</td>
+              <td className="px-4 py-3">
+                {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
+              </td>
               <td className="px-4 py-3">{formatDirection(hour.windFromDirection)}</td>
               <td className="px-4 py-3">
                 <ScoreBadge label={hour.scoreLabel} score={hour.score} />
