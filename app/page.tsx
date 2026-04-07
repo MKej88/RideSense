@@ -92,6 +92,7 @@ export default function HomePage() {
     const trimmedQuery = deferredQuery.trim();
 
     if (isSameAreaQuery(trimmedQuery, selectedArea)) {
+      setPlaceLoading(false);
       return;
     }
 
@@ -156,6 +157,7 @@ export default function HomePage() {
       active = false;
       controller.abort();
       window.clearTimeout(timeoutId);
+      setPlaceLoading(false);
     };
   }, [deferredQuery, selectedArea]);
 
