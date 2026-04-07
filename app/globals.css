@@ -6,3 +6,18 @@ body {
   background: #f1f5f9;
   color: #0f172a;
 }
+
+.ridesense-map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ridesense-map-pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  background-color: #dc2626;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+}
