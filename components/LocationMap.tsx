@@ -149,7 +149,7 @@ export function LocationMap({ lat, lon, label, onMarkerMoved }: LocationMapProps
         markerRef.current = null;
       }
     };
-  }, [onMarkerMoved]);
+  }, [label, lat, lon, onMarkerMoved]);
 
   useEffect(() => {
     if (!mapRef.current || !markerRef.current) {
