@@ -7,6 +7,10 @@ const OBSERVATION_RADIUS_DEGREES = 0.08;
 interface NetatmoModule {
   _id?: string;
   dashboard_data?: Record<string, unknown>;
+  time_utc?: unknown;
+  time?: unknown;
+  last_seen?: unknown;
+  last_message?: unknown;
 }
 
 interface NetatmoDevice {
@@ -17,6 +21,10 @@ interface NetatmoDevice {
   station_name?: string;
   dashboard_data?: Record<string, unknown>;
   modules?: NetatmoModule[];
+  time_utc?: unknown;
+  time?: unknown;
+  last_status_store?: unknown;
+  last_seen?: unknown;
 }
 
 function asFiniteNumber(value: unknown): number | undefined {
@@ -95,7 +103,15 @@ function extractObservation(
     moduleData.time_utc,
     deviceData.time_utc,
     moduleData.time,
-    deviceData.time
+    deviceData.time,
+    module?.time_utc,
+    device.time_utc,
+    module?.time,
+    device.time,
+    module?.last_seen,
+    module?.last_message,
+    device.last_status_store,
+    device.last_seen
   ]);
 
   if (observedAtSeconds === undefined) {
@@ -170,14 +186,29 @@ export async function fetchNearestStationObservation(
     typeof payload === "object" && payload !== null && "body" in payload
       ? (payload as { body?: unknown }).body
       : undefined;
-  const devices = Array.isArray(responseBody) ? responseBody : [];
+  const devices =
+    Array.isArray(responseBody)
+      ? responseBody
+      : typeof responseBody === "object" &&
+          responseBody !== null &&
+          "devices" in responseBody &&
+          Array.isArray((responseBody as { devices?: unknown }).devices)
+        ? (responseBody as { devices: unknown[] }).devices
+        : [];
   const observations = devices
-    .flatMap((device: NetatmoDevice) => {
-      const moduleList = Array.isArray(device.modules) ? device.modules : [];
+    .flatMap((device): StationObservation[] => {
+      if (typeof device !== "object" || device === null) {
+        return [];
+      }
+
+      const netatmoDevice = device as NetatmoDevice;
+      const moduleList = Array.isArray(netatmoDevice.modules)
+        ? netatmoDevice.modules
+        : [];
       const modules = [null, ...moduleList];
 
       return modules
-        .map((module) => extractObservation(device, module, lat, lon))
+        .map((module) => extractObservation(netatmoDevice, module, lat, lon))
         .filter((observation): observation is StationObservation => observation !== null);
     })
     .sort((left: StationObservation, right: StationObservation) => {
