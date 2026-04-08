@@ -2,7 +2,7 @@ import { StationObservation } from "@/lib/types";
 
 const NETATMO_PUBLIC_DATA_URL = "https://api.netatmo.com/api/getpublicdata";
 const NETATMO_FETCH_TIMEOUT_MS = 3500;
-const OBSERVATION_RADIUS_DEGREES = 0.08;
+const OBSERVATION_RADIUS_DEGREES_STEPS = [0.08, 0.2, 0.5];
 
 interface NetatmoModule {
   _id?: string;
@@ -155,78 +155,84 @@ export async function fetchNearestStationObservation(
     return null;
   }
 
-  const latNe = lat + OBSERVATION_RADIUS_DEGREES;
-  const lonNe = lon + OBSERVATION_RADIUS_DEGREES;
-  const latSw = lat - OBSERVATION_RADIUS_DEGREES;
-  const lonSw = lon - OBSERVATION_RADIUS_DEGREES;
-  const url =
-    `${NETATMO_PUBLIC_DATA_URL}?lat_ne=${latNe}&lon_ne=${lonNe}` +
-    `&lat_sw=${latSw}&lon_sw=${lonSw}&filter=false`;
+  for (const radius of OBSERVATION_RADIUS_DEGREES_STEPS) {
+    const latNe = lat + radius;
+    const lonNe = lon + radius;
+    const latSw = lat - radius;
+    const lonSw = lon - radius;
+    const url =
+      `${NETATMO_PUBLIC_DATA_URL}?lat_ne=${latNe}&lon_ne=${lonNe}` +
+      `&lat_sw=${latSw}&lon_sw=${lonSw}&filter=false`;
 
-  let response: Response;
+    let response: Response;
 
-  try {
-    response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      },
-      next: { revalidate: 300 },
-      signal: AbortSignal.timeout(NETATMO_FETCH_TIMEOUT_MS)
-    });
-  } catch {
-    return null;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        },
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(NETATMO_FETCH_TIMEOUT_MS)
+      });
+    } catch {
+      continue;
+    }
+
+    if (!response.ok) {
+      continue;
+    }
+
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      continue;
+    }
+
+    const responseBody =
+      typeof payload === "object" && payload !== null && "body" in payload
+        ? (payload as { body?: unknown }).body
+        : undefined;
+    const devices =
+      Array.isArray(responseBody)
+        ? responseBody
+        : typeof responseBody === "object" &&
+            responseBody !== null &&
+            "devices" in responseBody &&
+            Array.isArray((responseBody as { devices?: unknown }).devices)
+          ? (responseBody as { devices: unknown[] }).devices
+          : [];
+    const observations = devices
+      .flatMap((device): StationObservation[] => {
+        if (typeof device !== "object" || device === null) {
+          return [];
+        }
+
+        const netatmoDevice = device as NetatmoDevice;
+        const moduleList = Array.isArray(netatmoDevice.modules)
+          ? netatmoDevice.modules
+          : [];
+        const modules = [null, ...moduleList];
+
+        return modules
+          .map((module) => extractObservation(netatmoDevice, module, lat, lon))
+          .filter((observation): observation is StationObservation => observation !== null);
+      })
+      .sort((left: StationObservation, right: StationObservation) => {
+        if (left.distanceKm !== right.distanceKm) {
+          return left.distanceKm - right.distanceKm;
+        }
+
+        return (
+          new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime()
+        );
+      });
+
+    if (observations.length > 0) {
+      return observations[0];
+    }
   }
 
-  if (!response.ok) {
-    return null;
-  }
-
-  let payload: unknown;
-
-  try {
-    payload = await response.json();
-  } catch {
-    return null;
-  }
-
-  const responseBody =
-    typeof payload === "object" && payload !== null && "body" in payload
-      ? (payload as { body?: unknown }).body
-      : undefined;
-  const devices =
-    Array.isArray(responseBody)
-      ? responseBody
-      : typeof responseBody === "object" &&
-          responseBody !== null &&
-          "devices" in responseBody &&
-          Array.isArray((responseBody as { devices?: unknown }).devices)
-        ? (responseBody as { devices: unknown[] }).devices
-        : [];
-  const observations = devices
-    .flatMap((device): StationObservation[] => {
-      if (typeof device !== "object" || device === null) {
-        return [];
-      }
-
-      const netatmoDevice = device as NetatmoDevice;
-      const moduleList = Array.isArray(netatmoDevice.modules)
-        ? netatmoDevice.modules
-        : [];
-      const modules = [null, ...moduleList];
-
-      return modules
-        .map((module) => extractObservation(netatmoDevice, module, lat, lon))
-        .filter((observation): observation is StationObservation => observation !== null);
-    })
-    .sort((left: StationObservation, right: StationObservation) => {
-      if (left.distanceKm !== right.distanceKm) {
-        return left.distanceKm - right.distanceKm;
-      }
-
-      return (
-        new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime()
-      );
-    });
-
-  return observations[0] ?? null;
+  return null;
 }
