@@ -2,7 +2,7 @@ import { StationObservation } from "@/lib/types";
 
 const NETATMO_PUBLIC_DATA_URL = "https://api.netatmo.com/api/getpublicdata";
 const NETATMO_FETCH_TIMEOUT_MS = 3500;
-const OBSERVATION_RADIUS_DEGREES_STEPS = [0.08, 0.2, 0.5];
+const OBSERVATION_RADIUS_KM_STEPS = [3, 10];
 
 interface NetatmoModule {
   _id?: string;
@@ -75,6 +75,20 @@ function toKmDistance(latA: number, lonA: number, latB: number, lonB: number): n
 
 function toRadians(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+function toLatitudeDegreesFromKm(radiusKm: number): number {
+  return radiusKm / 110.574;
+}
+
+function toLongitudeDegreesFromKm(radiusKm: number, lat: number): number {
+  const kmPerLongitudeDegree = 111.32 * Math.cos(toRadians(lat));
+
+  if (kmPerLongitudeDegree <= 0.0001) {
+    return 180;
+  }
+
+  return radiusKm / kmPerLongitudeDegree;
 }
 
 function extractObservation(
@@ -155,11 +169,13 @@ export async function fetchNearestStationObservation(
     return null;
   }
 
-  for (const radius of OBSERVATION_RADIUS_DEGREES_STEPS) {
-    const latNe = lat + radius;
-    const lonNe = lon + radius;
-    const latSw = lat - radius;
-    const lonSw = lon - radius;
+  for (const radiusKm of OBSERVATION_RADIUS_KM_STEPS) {
+    const latRadiusDegrees = toLatitudeDegreesFromKm(radiusKm);
+    const lonRadiusDegrees = toLongitudeDegreesFromKm(radiusKm, lat);
+    const latNe = lat + latRadiusDegrees;
+    const lonNe = lon + lonRadiusDegrees;
+    const latSw = lat - latRadiusDegrees;
+    const lonSw = lon - lonRadiusDegrees;
     const url =
       `${NETATMO_PUBLIC_DATA_URL}?lat_ne=${latNe}&lon_ne=${lonNe}` +
       `&lat_sw=${latSw}&lon_sw=${lonSw}&filter=false`;
