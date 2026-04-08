@@ -2,6 +2,7 @@ import {
   RouteScoreSummary,
   ScoreLabel,
   ScoredWeatherHour,
+  StationObservation,
   WeatherHourRaw
 } from "@/lib/types";
 
@@ -15,6 +16,12 @@ interface ScoreThresholds {
   gustPenaltyStart: number;
   lightRainStart: number;
   heavyRainStart: number;
+}
+
+interface ObservationDelta {
+  temperature: number;
+  wind: number;
+  precipitation: number;
 }
 
 // Terskler samlet på ett sted for enkel justering i senere versjoner.
@@ -42,7 +49,113 @@ export function getScoreLabel(score: number): ScoreLabel {
   return "bad";
 }
 
-export function calculateBikeScore(hour: WeatherHourRaw): ScoredWeatherHour {
+function buildObservationDelta(
+  hour: WeatherHourRaw,
+  observation: StationObservation
+): ObservationDelta {
+  return {
+    temperature:
+      observation.airTemperature !== undefined
+        ? Math.abs(observation.airTemperature - hour.airTemperature)
+        : 0,
+    wind:
+      observation.windSpeed !== undefined
+        ? Math.abs(observation.windSpeed - hour.windSpeed)
+        : 0,
+    precipitation:
+      observation.precipitationAmount !== undefined
+        ? Math.abs(observation.precipitationAmount - hour.precipitationAmount)
+        : 0
+  };
+}
+
+function calculateObservationPenalty(delta: ObservationDelta): {
+  penalty: number;
+  reason: string | null;
+} {
+  const strongDeviation =
+    delta.temperature >= 4 || delta.wind >= 3 || delta.precipitation >= 1;
+  const mediumDeviation =
+    delta.temperature >= 2 || delta.wind >= 1.5 || delta.precipitation >= 0.5;
+
+  if (strongDeviation) {
+    return {
+      penalty: 10,
+      reason: "lokale målinger avviker tydelig fra prognosen"
+    };
+  }
+
+  if (mediumDeviation) {
+    return {
+      penalty: 4,
+      reason: "lokale målinger avviker litt fra prognosen"
+    };
+  }
+
+  return {
+    penalty: 0,
+    reason: null
+  };
+}
+
+function buildConfidence(
+  hasObservation: boolean,
+  observationPenalty: number,
+  observationAgeHours: number,
+  stationDistanceKm: number
+): { score: number; level: "high" | "medium" | "low"; reason: string } {
+  if (!hasObservation) {
+    return {
+      score: 60,
+      level: "medium",
+      reason: "Bygger kun på prognose fra MET."
+    };
+  }
+
+  let confidenceScore = 86;
+
+  if (observationAgeHours > 2) {
+    confidenceScore -= 16;
+  } else if (observationAgeHours > 1) {
+    confidenceScore -= 8;
+  }
+
+  if (stationDistanceKm > 8) {
+    confidenceScore -= 12;
+  } else if (stationDistanceKm > 4) {
+    confidenceScore -= 6;
+  }
+
+  confidenceScore -= observationPenalty * 2;
+  confidenceScore = Math.max(20, Math.min(98, Math.round(confidenceScore)));
+
+  if (confidenceScore >= 75) {
+    return {
+      score: confidenceScore,
+      level: "high",
+      reason: "Prognose er støttet av fersk lokal observasjon."
+    };
+  }
+
+  if (confidenceScore >= 50) {
+    return {
+      score: confidenceScore,
+      level: "medium",
+      reason: "Prognose er justert med observasjon, men med noe usikkerhet."
+    };
+  }
+
+  return {
+    score: confidenceScore,
+    level: "low",
+    reason: "Observasjon avviker mye eller er lite representativ for punktet."
+  };
+}
+
+export function calculateBikeScore(
+  hour: WeatherHourRaw,
+  observation: StationObservation | null = null
+): ScoredWeatherHour {
   let score = 100;
   const reasons: string[] = [];
 
@@ -84,13 +197,44 @@ export function calculateBikeScore(hour: WeatherHourRaw): ScoredWeatherHour {
     reasons.push("varm temperatur");
   }
 
+  let dataBasis: "forecast_only" | "forecast_plus_observation" = "forecast_only";
+  let observationPenalty = 0;
+  let observationAgeHours = 0;
+  let stationDistanceKm = 0;
+
+  if (observation) {
+    dataBasis = "forecast_plus_observation";
+    const delta = buildObservationDelta(hour, observation);
+    const penaltyResult = calculateObservationPenalty(delta);
+
+    observationPenalty = penaltyResult.penalty;
+    score -= observationPenalty;
+
+    if (penaltyResult.reason) {
+      reasons.push(penaltyResult.reason);
+    }
+
+    observationAgeHours =
+      (new Date(hour.time).getTime() - new Date(observation.observedAt).getTime()) /
+      (1000 * 60 * 60);
+    stationDistanceKm = observation.distanceKm;
+  }
+
   score = Math.max(0, Math.min(100, Math.round(score)));
+  const confidence = buildConfidence(
+    observation !== null,
+    observationPenalty,
+    observationAgeHours,
+    stationDistanceKm
+  );
 
   return {
     ...hour,
     score,
     scoreLabel: getScoreLabel(score),
-    scoreReasons: reasons.length > 0 ? reasons : ["stabile og gode forhold"]
+    scoreReasons: reasons.length > 0 ? reasons : ["stabile og gode forhold"],
+    dataBasis,
+    confidence
   };
 }
 
