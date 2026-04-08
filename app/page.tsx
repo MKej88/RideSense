@@ -589,7 +589,10 @@ export default function HomePage() {
             <p className="text-xs text-slate-500">
               {weather.observationSummary.used
                 ? `Observasjon fra ${weather.observationSummary.sourceName} (${weather.observationSummary.stationName || "ukjent stasjon"}).`
-                : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
+                : weather.observationSummary.stationName &&
+                    weather.observationSummary.observedAt
+                  ? `Fant observasjon fra ${weather.observationSummary.stationName}, men den er for gammel for timescoren. Appen bruker derfor kun prognose akkurat nå.`
+                  : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
             </p>
           </div>
           <BestWindowCard bestWindow={weather.bestWindowToday} />
