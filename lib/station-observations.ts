@@ -98,6 +98,10 @@ function extractObservation(
     deviceData.time
   ]);
 
+  if (observedAtSeconds === undefined) {
+    return null;
+  }
+
   if (
     airTemperature === undefined &&
     windSpeed === undefined &&
@@ -110,9 +114,7 @@ function extractObservation(
     source: "netatmo",
     stationId: module?._id ?? device._id ?? "ukjent",
     stationName: device.station_name ?? "Netatmo-stasjon",
-    observedAt: observedAtSeconds
-      ? new Date(observedAtSeconds * 1000).toISOString()
-      : new Date().toISOString(),
+    observedAt: new Date(observedAtSeconds * 1000).toISOString(),
     distanceKm: Math.round(distanceKm * 10) / 10,
     airTemperature,
     precipitationAmount,
@@ -156,8 +158,19 @@ export async function fetchNearestStationObservation(
     return null;
   }
 
-  const payload = await response.json();
-  const devices = Array.isArray(payload?.body) ? payload.body : [];
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  const responseBody =
+    typeof payload === "object" && payload !== null && "body" in payload
+      ? (payload as { body?: unknown }).body
+      : undefined;
+  const devices = Array.isArray(responseBody) ? responseBody : [];
   const observations = devices
     .flatMap((device: NetatmoDevice) => {
       const moduleList = Array.isArray(device.modules) ? device.modules : [];
