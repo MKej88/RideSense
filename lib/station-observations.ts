@@ -45,9 +45,16 @@ function asFiniteNumber(value: unknown): number | undefined {
 
 function getObservedTimestampSeconds(values: Array<unknown>): number | undefined {
   for (const value of values) {
-    const timestamp = asFiniteNumber(value);
+    const rawTimestamp = asFiniteNumber(value);
 
-    if (timestamp !== undefined && timestamp > 0) {
+    if (rawTimestamp === undefined || rawTimestamp <= 0) {
+      continue;
+    }
+
+    const timestamp =
+      rawTimestamp > 100_000_000_000 ? Math.floor(rawTimestamp / 1000) : rawTimestamp;
+
+    if (timestamp > 0) {
       return timestamp;
     }
   }
