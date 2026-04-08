@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { RoutePoint } from "@/lib/types";
 
 interface LocationMapProps {
   lat: number;
   lon: number;
   label: string;
   onMarkerMoved: (lat: number, lon: number) => void;
+  routeName?: string | null;
+  routePoints?: RoutePoint[];
 }
 
 type LeafletMap = {
   setView: (center: [number, number], zoom: number) => void;
+  fitBounds: (bounds: LeafletBounds, options?: { padding?: [number, number] }) => void;
   remove: () => void;
 };
 
@@ -21,6 +25,16 @@ type LeafletMarker = {
   openPopup: () => void;
   on: (eventName: string, callback: () => void) => void;
   getLatLng: () => { lat: number; lng: number };
+};
+
+type LeafletBounds = unknown;
+
+type LeafletPolyline = {
+  addTo: (map: LeafletMap) => void;
+  remove: () => void;
+  setLatLngs: (latlngs: [number, number][]) => void;
+  bindPopup: (text: string) => LeafletPolyline;
+  getBounds: () => LeafletBounds;
 };
 
 type LeafletGlobal = {
@@ -41,6 +55,14 @@ type LeafletGlobal = {
       icon: unknown;
     }
   ) => LeafletMarker;
+  polyline: (
+    latlngs: [number, number][],
+    options: {
+      color: string;
+      weight: number;
+      opacity: number;
+    }
+  ) => LeafletPolyline;
   divIcon: (options: { className: string; html: string; iconSize: [number, number] }) => unknown;
 };
 
@@ -90,10 +112,19 @@ function ensureLeafletAssets(): Promise<void> {
   });
 }
 
-export function LocationMap({ lat, lon, label, onMarkerMoved }: LocationMapProps) {
+export function LocationMap({
+  lat,
+  lon,
+  label,
+  onMarkerMoved,
+  routeName,
+  routePoints = []
+}: LocationMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
+  const routeRef = useRef<LeafletPolyline | null>(null);
+  const initialStateRef = useRef({ lat, lon, label });
 
   useEffect(() => {
     let active = true;
@@ -127,16 +158,18 @@ export function LocationMap({ lat, lon, label, onMarkerMoved }: LocationMapProps
         iconSize: [20, 20]
       });
 
-      const marker = window.L.marker([lat, lon], { draggable: true, icon });
+      const { lat: initialLat, lon: initialLon, label: initialLabel } = initialStateRef.current;
+
+      const marker = window.L.marker([initialLat, initialLon], { draggable: true, icon });
       marker.addTo(map);
-      marker.bindPopup(label).openPopup();
+      marker.bindPopup(initialLabel).openPopup();
       marker.on("dragend", () => {
         const nextPosition = marker.getLatLng();
         onMarkerMoved(nextPosition.lat, nextPosition.lng);
       });
       markerRef.current = marker;
 
-      map.setView([lat, lon], 12);
+      map.setView([initialLat, initialLon], 12);
     }
 
     initializeMap();
@@ -147,25 +180,48 @@ export function LocationMap({ lat, lon, label, onMarkerMoved }: LocationMapProps
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
+        routeRef.current = null;
       }
     };
-  }, [label, lat, lon, onMarkerMoved]);
+  }, [onMarkerMoved]);
 
   useEffect(() => {
     if (!mapRef.current || !markerRef.current) {
       return;
     }
 
-    mapRef.current.setView([lat, lon], 12);
+    const routeLatLngs = routePoints.map((point) => [point.lat, point.lon] as [number, number]);
+
+    if (window.L && routeLatLngs.length >= 2) {
+      if (!routeRef.current) {
+        routeRef.current = window.L.polyline(routeLatLngs, {
+          color: "#f97316",
+          weight: 6,
+          opacity: 0.85
+        });
+        routeRef.current.addTo(mapRef.current);
+      } else {
+        routeRef.current.setLatLngs(routeLatLngs);
+      }
+
+      routeRef.current.bindPopup(routeName || "Valgt rute");
+      mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [36, 36] });
+    } else {
+      routeRef.current?.remove();
+      routeRef.current = null;
+      mapRef.current.setView([lat, lon], 12);
+    }
+
     markerRef.current.setLatLng([lat, lon]);
     markerRef.current.bindPopup(label).openPopup();
-  }, [lat, lon, label]);
+  }, [lat, lon, label, routeName, routePoints]);
 
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm">
       <h3 className="text-base font-semibold text-slate-900">Kart</h3>
       <p className="mt-1 text-sm text-slate-600">
-        Dra markøren for å oppdatere vær og sykkelscore for ny posisjon.
+        Dra markøren for å oppdatere startplass og vær. Når du velger en rute, vises den som en
+        tydelig orange linje og kartet sentreres på ruten.
       </p>
       <div ref={mapContainerRef} className="mt-3 h-72 w-full overflow-hidden rounded-lg md:h-96" />
     </section>
