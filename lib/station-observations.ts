@@ -5,6 +5,7 @@ const NETATMO_PUBLIC_DATA_URLS = [
   "https://api.netatmo.com/api/getpublicdata"
 ];
 const NETATMO_FETCH_TIMEOUT_MS = 3500;
+const NETATMO_MAX_REQUEST_ATTEMPTS = 2;
 const OBSERVATION_RADIUS_KM_STEPS = [3, 10];
 
 interface NetatmoModule {
@@ -172,6 +173,8 @@ export async function fetchNearestStationObservation(
     return null;
   }
 
+  let requestAttempts = 0;
+
   for (const radiusKm of OBSERVATION_RADIUS_KM_STEPS) {
     const latRadiusDegrees = toLatitudeDegreesFromKm(radiusKm);
     const lonRadiusDegrees = toLongitudeDegreesFromKm(radiusKm, lat);
@@ -181,11 +184,16 @@ export async function fetchNearestStationObservation(
     const lonSw = lon - lonRadiusDegrees;
 
     for (const baseUrl of NETATMO_PUBLIC_DATA_URLS) {
+      if (requestAttempts >= NETATMO_MAX_REQUEST_ATTEMPTS) {
+        return null;
+      }
+
       const url =
         `${baseUrl}?lat_ne=${latNe}&lon_ne=${lonNe}` +
         `&lat_sw=${latSw}&lon_sw=${lonSw}&filter=false`;
 
       let response: Response;
+      requestAttempts += 1;
 
       try {
         response = await fetch(url, {
