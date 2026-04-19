@@ -152,48 +152,84 @@ function buildConfidence(
   };
 }
 
+function calculateTemperaturePenalty(temperature: number): number {
+  if (
+    temperature >= SCORE_THRESHOLDS.idealTempMin &&
+    temperature <= SCORE_THRESHOLDS.idealTempMax
+  ) {
+    return 0;
+  }
+
+  if (temperature < SCORE_THRESHOLDS.idealTempMin) {
+    return (SCORE_THRESHOLDS.idealTempMin - temperature) * 1.6;
+  }
+
+  return (temperature - SCORE_THRESHOLDS.idealTempMax) * 1.8;
+}
+
+function calculateRainPenalty(precipitationAmount: number): number {
+  return Math.min(45, Math.sqrt(Math.max(0, precipitationAmount)) * 22);
+}
+
+function calculateWindPenalty(windSpeed: number): number {
+  const calmWindThreshold = 4;
+
+  if (windSpeed <= calmWindThreshold) {
+    return 0;
+  }
+
+  return Math.min(35, (windSpeed - calmWindThreshold) * 3.2);
+}
+
+function calculateGustPenalty(
+  windGust: number | undefined,
+  windSpeed: number
+): number {
+  if (windGust === undefined) {
+    return 0;
+  }
+
+  const extraGust = Math.max(0, windGust - windSpeed);
+  return Math.min(12, extraGust * 1.2);
+}
+
 export function calculateBikeScore(
   hour: WeatherHourRaw,
   observation: StationObservation | null = null
 ): ScoredWeatherHour {
-  let score = 100;
+  let penalty = 0;
   const reasons: string[] = [];
 
-  if (hour.precipitationAmount >= SCORE_THRESHOLDS.heavyRainStart) {
-    score -= 35;
+  const rainPenalty = calculateRainPenalty(hour.precipitationAmount);
+  penalty += rainPenalty;
+  if (rainPenalty >= 25) {
     reasons.push("kraftig nedbør trekker mye ned");
-  } else if (hour.precipitationAmount >= SCORE_THRESHOLDS.lightRainStart) {
-    score -= 18;
+  } else if (rainPenalty >= 8) {
     reasons.push("lett nedbør trekker ned");
   }
 
-  if (hour.windSpeed >= SCORE_THRESHOLDS.strongWindStart) {
-    score -= 28;
+  const windPenalty = calculateWindPenalty(hour.windSpeed);
+  penalty += windPenalty;
+  if (windPenalty >= 20) {
     reasons.push("sterk vind gjør forholdene krevende");
-  } else if (hour.windSpeed >= SCORE_THRESHOLDS.moderateWindStart) {
-    score -= 14;
+  } else if (windPenalty >= 8) {
     reasons.push("moderat vind trekker ned");
   }
 
-  if (
-    hour.windGust !== undefined &&
-    hour.windGust >= SCORE_THRESHOLDS.gustPenaltyStart
-  ) {
-    score -= 12;
+  const gustPenalty = calculateGustPenalty(hour.windGust, hour.windSpeed);
+  penalty += gustPenalty;
+  if (gustPenalty >= 6) {
     reasons.push("vindkast gir uforutsigbare forhold");
   }
 
+  penalty += calculateTemperaturePenalty(hour.airTemperature);
   if (hour.airTemperature < SCORE_THRESHOLDS.coldPenaltyStart) {
-    score -= 20;
     reasons.push("kald temperatur");
   } else if (hour.airTemperature < SCORE_THRESHOLDS.idealTempMin) {
-    score -= 8;
     reasons.push("litt kjølig temperatur");
   } else if (hour.airTemperature > SCORE_THRESHOLDS.heatPenaltyStart + 4) {
-    score -= 20;
     reasons.push("svært høy temperatur");
   } else if (hour.airTemperature > SCORE_THRESHOLDS.heatPenaltyStart) {
-    score -= 10;
     reasons.push("varm temperatur");
   }
 
@@ -208,7 +244,7 @@ export function calculateBikeScore(
     const penaltyResult = calculateObservationPenalty(delta);
 
     observationPenalty = penaltyResult.penalty;
-    score -= observationPenalty;
+    penalty += observationPenalty;
 
     if (penaltyResult.reason) {
       reasons.push(penaltyResult.reason);
@@ -220,7 +256,7 @@ export function calculateBikeScore(
     stationDistanceKm = observation.distanceKm;
   }
 
-  score = Math.max(0, Math.min(100, Math.round(score)));
+  const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
   const confidence = buildConfidence(
     observation !== null,
     observationPenalty,
@@ -284,19 +320,65 @@ export function findBestWindowToday(hours: ScoredWeatherHour[]): {
   averageScore: number;
   explanation: string;
 } | null {
-  const today = new Date().toISOString().slice(0, 10);
-  const todayHours = hours.filter((hour) => hour.time.startsWith(today));
+  const osloToday = formatDateInTimeZone(new Date(), "Europe/Oslo");
 
-  if (todayHours.length === 0) {
+  return findBestWindowWithinPeriod(hours, (hourDate, now) => {
+    const isTodayInOslo =
+      formatDateInTimeZone(hourDate, "Europe/Oslo") === osloToday;
+    const isFutureHour = hourDate.getTime() >= now.getTime();
+
+    return isTodayInOslo && isFutureHour;
+  });
+}
+
+export function findBestWindowNext7Days(hours: ScoredWeatherHour[]): {
+  startTime: string;
+  endTime: string;
+  averageScore: number;
+  explanation: string;
+} | null {
+  return findBestWindowWithinPeriod(hours, (hourDate, now) => {
+    const msInDay = 24 * 60 * 60 * 1000;
+    const diffMs = hourDate.getTime() - now.getTime();
+
+    return diffMs >= 0 && diffMs <= 7 * msInDay;
+  });
+}
+
+function formatDateInTimeZone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function findBestWindowWithinPeriod(
+  hours: ScoredWeatherHour[],
+  predicate: (hourDate: Date, now: Date) => boolean
+): {
+  startTime: string;
+  endTime: string;
+  averageScore: number;
+  explanation: string;
+} | null {
+  const now = new Date();
+  const candidateHours = hours.filter((hour) => {
+    const hourDate = new Date(hour.time);
+    return predicate(hourDate, now);
+  });
+
+  if (candidateHours.length === 0) {
     return null;
   }
 
-  const windowSize = Math.min(3, todayHours.length);
+  const windowSize = Math.min(3, candidateHours.length);
   let bestStartIndex = 0;
   let bestAverage = -1;
 
-  for (let index = 0; index <= todayHours.length - windowSize; index += 1) {
-    const segment = todayHours.slice(index, index + windowSize);
+  for (let index = 0; index <= candidateHours.length - windowSize; index += 1) {
+    const segment = candidateHours.slice(index, index + windowSize);
     const average =
       segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
 
@@ -306,7 +388,7 @@ export function findBestWindowToday(hours: ScoredWeatherHour[]): {
     }
   }
 
-  const bestSegment = todayHours.slice(bestStartIndex, bestStartIndex + windowSize);
+  const bestSegment = candidateHours.slice(bestStartIndex, bestStartIndex + windowSize);
   const first = bestSegment[0];
   const last = bestSegment[bestSegment.length - 1];
 

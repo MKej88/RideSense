@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormEvent, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
-import { GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { BestWindow, GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
 
 interface ApiError {
   error: string;
@@ -44,7 +44,48 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
   return query.trim() === getAreaContextLabel(place);
 }
 
+function getOsloDayKey(time: string): string {
+  return new Date(time).toLocaleDateString("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+}
+
+function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
+  if (hours.length === 0) {
+    return null;
+  }
+
+  const windowSize = Math.min(3, hours.length);
+  let bestStartIndex = 0;
+  let bestAverage = -1;
+
+  for (let index = 0; index <= hours.length - windowSize; index += 1) {
+    const segment = hours.slice(index, index + windowSize);
+    const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
+
+    if (average > bestAverage) {
+      bestAverage = average;
+      bestStartIndex = index;
+    }
+  }
+
+  const bestSegment = hours.slice(bestStartIndex, bestStartIndex + windowSize);
+
+  return {
+    startTime: bestSegment[0].time,
+    endTime: bestSegment[bestSegment.length - 1].time,
+    averageScore: Math.round(bestAverage),
+    explanation: "Beste synlige tidsvindu basert på gjennomsnittlig sykkelscore."
+  };
+}
+
 export default function HomePage() {
+  const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
+  const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
+  const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
@@ -322,6 +363,92 @@ export default function HomePage() {
   const selectedRoute =
     routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
 
+  const visibleWeatherHours = useMemo(() => {
+    if (!weather) {
+      return [];
+    }
+
+    if (forecastRange === "7d") {
+      const now = Date.now();
+      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= now);
+      const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
+      const allowedDays = new Set(dayKeys.slice(0, 7));
+
+      return futureHours.filter((hour) => allowedDays.has(getOsloDayKey(hour.time)));
+    }
+
+    const now = Date.now();
+    const nextDayHours = weather.hours
+      .filter((hour) => new Date(hour.time).getTime() >= now)
+      .slice(0, 24);
+
+    return nextDayHours.filter((hour) => {
+      const localHour = Number(
+        new Date(hour.time).toLocaleTimeString("nb-NO", {
+          hour: "2-digit",
+          hour12: false,
+          timeZone: "Europe/Oslo"
+        })
+      );
+
+      return localHour >= 6;
+    });
+  }, [forecastRange, weather]);
+
+  const forecastDays = useMemo(() => {
+    const grouped = new Map<string, typeof visibleWeatherHours>();
+
+    visibleWeatherHours.forEach((hour) => {
+      const key = getOsloDayKey(hour.time);
+      const existing = grouped.get(key) || [];
+      existing.push(hour);
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.entries()).map(([dayKey, hours]) => ({
+      dayKey,
+      label: new Date(hours[0].time).toLocaleDateString("nb-NO", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "Europe/Oslo"
+      }),
+      hours
+    }));
+  }, [visibleWeatherHours]);
+
+  useEffect(() => {
+    if (forecastRange !== "7d") {
+      return;
+    }
+
+    if (forecastDays.length === 0) {
+      setSelectedForecastDay(null);
+      return;
+    }
+
+    if (!selectedForecastDay || !forecastDays.some((day) => day.dayKey === selectedForecastDay)) {
+      setSelectedForecastDay(forecastDays[0].dayKey);
+    }
+  }, [forecastDays, forecastRange, selectedForecastDay]);
+
+  const displayedForecastHours = useMemo(() => {
+    if (forecastRange === "24h") {
+      return visibleWeatherHours;
+    }
+
+    const selectedDay = forecastDays.find((day) => day.dayKey === selectedForecastDay);
+    return selectedDay?.hours || [];
+  }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
+
+  const visibleBestWindow24h = useMemo(() => {
+    if (forecastRange !== "24h") {
+      return null;
+    }
+
+    return buildBestWindowFromHours(visibleWeatherHours);
+  }, [forecastRange, visibleWeatherHours]);
+
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
       const movedPlace: GeocodeResult = {
@@ -363,11 +490,43 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">RideSense</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Finn beste tidspunkt for landeveissykling basert på vær, vind og nedbør.
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
+      <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
+        <h1 className="text-3xl font-bold">RideSense</h1>
+        <p className="mt-2 text-sm text-sky-50">
+          Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
+        </p>
+
+        <div className="mt-5 inline-flex rounded-xl bg-white/20 p-1">
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              activeTab === "forecast"
+                ? "bg-white text-slate-900"
+                : "text-white hover:bg-white/20"
+            }`}
+            onClick={() => setActiveTab("forecast")}
+          >
+            Vær og tidspunkt
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              activeTab === "routes"
+                ? "bg-white text-slate-900"
+                : "text-white hover:bg-white/20"
+            }`}
+            onClick={() => setActiveTab("routes")}
+          >
+            Ruteanalyse
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900">1) Velg sted</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Søk etter område først, deretter startadresse. Så får du resultat direkte.
         </p>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -418,7 +577,10 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-200"
-                  onClick={() => chooseArea(place)}
+                  onClick={() => {
+                    chooseArea(place);
+                    void loadWeatherForPlace(place);
+                  }}
                 >
                   {place.name}
                 </button>
@@ -433,115 +595,8 @@ export default function HomePage() {
           </p>
         )}
 
-        {selectedArea && (
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h2 className="text-base font-semibold text-slate-900">Startadresse</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Valgt sted: {selectedArea.name}. Søk nå opp en adresse innenfor dette stedet.
-            </p>
-
-            <div className="mt-4">
-              <input
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
-                placeholder={`Søk adresse i ${selectedArea.name}`}
-                value={addressQuery}
-                onChange={(event) => {
-                  setAddressQuery(event.target.value);
-                  setAddressError(null);
-                  setSelected(null);
-                  setWeather(null);
-                  setRouteAnalysis(null);
-                  setSelectedRouteId(null);
-                }}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                Adresselisten oppdateres automatisk mens du skriver.
-              </p>
-            </div>
-
-            {addressLoading && (
-              <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
-            )}
-
-            {addressError && (
-              <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
-            )}
-
-            {addressResults.length > 0 && (
-              <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                {addressResults.map((place) => (
-                  <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
-                      onClick={() => loadWeatherForPlace(place)}
-                    >
-                      {place.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {!addressLoading &&
-              !addressError &&
-              addressQuery.trim().length >= 2 &&
-              addressResults.length === 0 && (
-              <p className="mt-3 text-sm text-slate-600">
-                Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
-              </p>
-            )}
-          </div>
-        )}
-
         {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <h2 className="text-base font-semibold text-slate-900">Ruteanalyse</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Velg startplass, angi min og maks km, og kjør analyse. Distanse regnes som tur/retur.
-          </p>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-white p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {selected?.name || "Velg adresse først"}
-              </p>
-            </div>
-            <label className="rounded-lg bg-white p-3">
-              <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={minDistanceKm}
-                onChange={(event) => setMinDistanceKm(event.target.value)}
-                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              />
-            </label>
-            <label className="rounded-lg bg-white p-3">
-              <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={maxDistanceKm}
-                onChange={(event) => setMaxDistanceKm(event.target.value)}
-                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              />
-            </label>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void analyzeRoutes()}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
-            disabled={!selected || routeLoading || weatherLoading || addressLoading}
-          >
-            Analyser ruter
-          </button>
-        </div>
       </section>
 
       {!weather && !weatherLoading && !error && (
@@ -554,33 +609,57 @@ export default function HomePage() {
         <section className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Laster data …</section>
       )}
 
-      {selected && (
-        <LocationMap
-          lat={selected.lat}
-          lon={selected.lon}
-          label={selected.name}
-          onMarkerMoved={onMarkerMoved}
-          routeName={selectedRoute?.shortName || null}
-          routePoints={selectedRoute?.points || []}
-        />
-      )}
-
-      {selected && (
-        <RouteAnalysisPanel
-          data={routeAnalysis}
-          loading={routeLoading}
-          error={routeError}
-          selectedRouteId={selectedRouteId}
-          onSelectRoute={setSelectedRouteId}
-          onRefresh={() => void analyzeRoutes()}
-        />
-      )}
-
-      {weather && (
+      {weather && activeTab === "forecast" && (
         <section className="space-y-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
-            <p className="text-sm text-slate-600">Neste 24 timer</p>
+            <div className="mt-3 inline-flex rounded-lg bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setForecastRange("24h")}
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  forecastRange === "24h"
+                    ? "bg-white font-medium text-slate-900 shadow-sm"
+                    : "text-slate-700"
+                }`}
+              >
+                Neste 24 timer
+              </button>
+              <button
+                type="button"
+                onClick={() => setForecastRange("7d")}
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  forecastRange === "7d"
+                    ? "bg-white font-medium text-slate-900 shadow-sm"
+                    : "text-slate-700"
+                }`}
+              >
+                Neste 7 dager
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <BestWindowCard
+                bestWindow={forecastRange === "24h" ? visibleBestWindow24h : weather.bestWindowNext7Days}
+                title={
+                  forecastRange === "24h"
+                    ? "Beste tidspunkt i dag"
+                    : "Beste tidspunkt neste 7 dager"
+                }
+                emptyMessage={
+                  forecastRange === "24h"
+                    ? "Ingen timer igjen i dag å evaluere."
+                    : "Fant ikke tilgjengelige timer i de neste 7 dagene."
+                }
+                includeDay={forecastRange === "7d"}
+              />
+            </div>
+
+            <p className="mt-2 text-sm text-slate-600">
+              {forecastRange === "24h"
+                ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
+                : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
+            </p>
             <p className="mt-2 text-sm text-slate-700">
               Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
                 ? "prognose + observasjon"
@@ -595,9 +674,161 @@ export default function HomePage() {
                   : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
             </p>
           </div>
-          <BestWindowCard bestWindow={weather.bestWindowToday} />
-          <WeatherTable hours={weather.hours} />
+
+          {forecastRange === "7d" && forecastDays.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="flex min-w-max gap-2">
+                {forecastDays.map((day) => (
+                  <button
+                    key={day.dayKey}
+                    type="button"
+                    onClick={() => setSelectedForecastDay(day.dayKey)}
+                    className={`rounded-lg px-3 py-2 text-sm ${
+                      day.dayKey === selectedForecastDay
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <WeatherTable hours={displayedForecastHours} />
         </section>
+      )}
+
+      {activeTab === "routes" && (
+        <section className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Ruteanalyse</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-base font-semibold text-slate-900">Startadresse (kun ruteanalyse)</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
+              </p>
+
+              <input
+                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+                placeholder={
+                  selectedArea
+                    ? `Søk adresse i ${selectedArea.name}`
+                    : "Velg sted på hovedfanen først"
+                }
+                value={addressQuery}
+                onChange={(event) => {
+                  setAddressQuery(event.target.value);
+                  setAddressError(null);
+                  setSelected(null);
+                  setRouteAnalysis(null);
+                  setSelectedRouteId(null);
+                }}
+                disabled={!selectedArea}
+              />
+
+              {addressLoading && (
+                <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
+              )}
+
+              {addressError && (
+                <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
+              )}
+
+              {addressResults.length > 0 && (
+                <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                  {addressResults.map((place) => (
+                    <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                      <button
+                        type="button"
+                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+                        onClick={() => void loadWeatherForPlace(place)}
+                      >
+                        {place.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {!addressLoading &&
+                !addressError &&
+                selectedArea &&
+                addressQuery.trim().length >= 2 &&
+                addressResults.length === 0 && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
+                  </p>
+                )}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {selected?.name || "Velg adresse først"}
+                </p>
+              </div>
+              <label className="rounded-lg bg-slate-50 p-3">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={minDistanceKm}
+                  onChange={(event) => setMinDistanceKm(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </label>
+              <label className="rounded-lg bg-slate-50 p-3">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={maxDistanceKm}
+                  onChange={(event) => setMaxDistanceKm(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void analyzeRoutes()}
+              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
+              disabled={!selected || routeLoading || weatherLoading || addressLoading}
+            >
+              Analyser ruter
+            </button>
+          </div>
+
+          {selected && (
+            <RouteAnalysisPanel
+              data={routeAnalysis}
+              loading={routeLoading}
+              error={routeError}
+              selectedRouteId={selectedRouteId}
+              onSelectRoute={setSelectedRouteId}
+              onRefresh={() => void analyzeRoutes()}
+            />
+          )}
+        </section>
+      )}
+
+      {selected && (
+        <LocationMap
+          lat={selected.lat}
+          lon={selected.lon}
+          label={selected.name}
+          onMarkerMoved={onMarkerMoved}
+          routeName={selectedRoute?.shortName || null}
+          routePoints={selectedRoute?.points || []}
+        />
       )}
     </main>
   );

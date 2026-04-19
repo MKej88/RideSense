@@ -57,6 +57,7 @@ export interface WeatherResponse {
   timezone: string;
   hours: ScoredWeatherHour[];
   bestWindowToday: BestWindow | null;
+  bestWindowNext7Days: BestWindow | null;
   dataBasis: WeatherDataBasis;
   observationSummary: {
     used: boolean;

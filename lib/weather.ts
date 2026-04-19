@@ -1,10 +1,11 @@
-import { calculateBikeScore, findBestWindowToday } from "@/lib/scoring";
+import { calculateBikeScore, findBestWindowNext7Days, findBestWindowToday } from "@/lib/scoring";
 import { fetchNearestStationObservation } from "@/lib/station-observations";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
 const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
 const MET_FETCH_TIMEOUT_MS = 4000;
 const OBSERVATION_MAX_AGE_HOURS = 2;
+const FORECAST_HOURS = 24 * 7;
 
 function asFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -42,6 +43,29 @@ function resolveWindGust(
   }
 
   return undefined;
+}
+
+function resolvePrecipitationAmount(
+  next1hDetails: Record<string, unknown> | undefined,
+  next6hDetails: Record<string, unknown> | undefined,
+  next12hDetails: Record<string, unknown> | undefined
+): number {
+  const next1hAmount = asFiniteNumber(next1hDetails?.precipitation_amount);
+  if (next1hAmount !== undefined) {
+    return Math.max(0, next1hAmount);
+  }
+
+  const next6hAmount = asFiniteNumber(next6hDetails?.precipitation_amount);
+  if (next6hAmount !== undefined) {
+    return Math.max(0, next6hAmount / 6);
+  }
+
+  const next12hAmount = asFiniteNumber(next12hDetails?.precipitation_amount);
+  if (next12hAmount !== undefined) {
+    return Math.max(0, next12hAmount / 12);
+  }
+
+  return 0;
 }
 
 function shouldUseObservation(hourTime: string, observedAt: string): boolean {
@@ -85,7 +109,7 @@ export async function fetchForecastForLocation(
   }
 
   const observation = await fetchNearestStationObservation(lat, lon);
-  const hoursRaw: WeatherHourRaw[] = series.slice(0, 24).map((entry: any) => {
+  const hoursRaw: WeatherHourRaw[] = series.slice(0, FORECAST_HOURS).map((entry: any) => {
     const details = entry?.data?.instant?.details;
     const next1h = entry?.data?.next_1_hours?.details;
     const next6h = entry?.data?.next_6_hours?.details;
@@ -94,7 +118,7 @@ export async function fetchForecastForLocation(
     return {
       time: entry.time,
       airTemperature: details?.air_temperature ?? 0,
-      precipitationAmount: next1h?.precipitation_amount ?? 0,
+      precipitationAmount: resolvePrecipitationAmount(next1h, next6h, next12h),
       windSpeed: details?.wind_speed ?? 0,
       windFromDirection: details?.wind_from_direction,
       windGust: resolveWindGust(details, next1h, next6h, next12h)
@@ -119,6 +143,7 @@ export async function fetchForecastForLocation(
     timezone: "Europe/Oslo",
     hours: scoredHours,
     bestWindowToday: findBestWindowToday(scoredHours),
+    bestWindowNext7Days: findBestWindowNext7Days(scoredHours),
     dataBasis: hasObservation ? "forecast_plus_observation" : "forecast_only",
     observationSummary: {
       used: hasObservation,

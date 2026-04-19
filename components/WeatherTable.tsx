@@ -2,9 +2,11 @@ import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
 
 function formatHour(time: string): string {
-  return new Date(time).toLocaleTimeString("nb-NO", {
+  return new Date(time).toLocaleString("nb-NO", {
+    weekday: "long",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Europe/Oslo"
   });
 }
 
@@ -13,19 +15,50 @@ function formatDirection(direction?: number): string {
     return "-";
   }
 
-  return `${Math.round(direction)}°`;
+  const normalized = ((direction % 360) + 360) % 360;
+  const compassDirections = [
+    "nord",
+    "nordøst",
+    "øst",
+    "sørøst",
+    "sør",
+    "sørvest",
+    "vest",
+    "nordvest"
+  ];
+  const index = Math.round(normalized / 45) % 8;
+
+  return compassDirections[index];
 }
 
-function formatConfidence(level: "high" | "medium" | "low", score: number): string {
-  if (level === "high") {
-    return `Høy (${score})`;
+function formatWindDescription(windSpeed: number, direction?: number): string {
+  const directionText = direction === undefined ? "ukjent retning" : formatDirection(direction);
+
+  if (windSpeed < 1.6) {
+    return `Flau vind fra ${directionText}`;
   }
 
-  if (level === "medium") {
-    return `Middels (${score})`;
+  if (windSpeed < 3.4) {
+    return `Svak vind fra ${directionText}`;
   }
 
-  return `Lav (${score})`;
+  if (windSpeed < 5.5) {
+    return `Lett bris fra ${directionText}`;
+  }
+
+  if (windSpeed < 8) {
+    return `Laber bris fra ${directionText}`;
+  }
+
+  if (windSpeed < 10.8) {
+    return `Frisk bris fra ${directionText}`;
+  }
+
+  if (windSpeed < 13.9) {
+    return `Liten kuling fra ${directionText}`;
+  }
+
+  return `Sterk vind fra ${directionText}`;
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
@@ -39,8 +72,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             <th className="px-4 py-3">Nedbør</th>
             <th className="px-4 py-3">Vind</th>
             <th className="px-4 py-3">Vindkast</th>
-            <th className="px-4 py-3">Retning</th>
-            <th className="px-4 py-3">Datatillit</th>
+            <th className="px-4 py-3">Vindretning</th>
             <th className="px-4 py-3">Score</th>
           </tr>
         </thead>
@@ -54,10 +86,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <td className="px-4 py-3">
                 {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
               </td>
-              <td className="px-4 py-3">{formatDirection(hour.windFromDirection)}</td>
-              <td className="px-4 py-3 text-slate-600">
-                {formatConfidence(hour.confidence.level, hour.confidence.score)}
-              </td>
+              <td className="px-4 py-3">{formatWindDescription(hour.windSpeed, hour.windFromDirection)}</td>
               <td className="px-4 py-3">
                 <ScoreBadge label={hour.scoreLabel} score={hour.score} />
               </td>
