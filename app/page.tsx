@@ -107,9 +107,9 @@ function getNextHourTimestamp(nowMs: number): number {
 
 function buildBestWindowFromHours(
   hours: WeatherResponse["hours"],
-  nowMs: number = Date.now()
+  analysisRunMs: number
 ): BestWindow | null {
-  const nextHourTs = getNextHourTimestamp(nowMs);
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
   const futureHours = hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
 
   if (futureHours.length === 0) {
@@ -169,23 +169,13 @@ export default function HomePage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [minDistanceKm, setMinDistanceKm] = useState("15");
   const [maxDistanceKm, setMaxDistanceKm] = useState("35");
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 60_000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, []);
 
   function searchPlace(event: FormEvent): void {
     event.preventDefault();
@@ -202,6 +192,7 @@ export default function HomePage() {
     setRouteAnalysis(null);
     setSelectedRouteId(null);
     setRouteError(null);
+    setAnalysisRunMs(null);
     setResults([]);
   }
 
@@ -358,6 +349,7 @@ export default function HomePage() {
   }, [deferredAddressQuery, areaContext, selectedArea]);
 
   const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
+    const startedAtMs = Date.now();
     setWeatherLoading(true);
     setError(null);
     setRouteError(null);
@@ -365,6 +357,7 @@ export default function HomePage() {
     setWeather(null);
     setRouteAnalysis(null);
     setSelectedRouteId(null);
+    setAnalysisRunMs(startedAtMs);
 
     try {
       const response = await fetch(
@@ -382,6 +375,7 @@ export default function HomePage() {
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
       setWeather(null);
+      setAnalysisRunMs(null);
     } finally {
       setWeatherLoading(false);
     }
@@ -440,11 +434,11 @@ export default function HomePage() {
     routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
 
   const visibleWeatherHours = useMemo(() => {
-    if (!weather) {
+    if (!weather || analysisRunMs === null) {
       return [];
     }
 
-    const nextHourTs = getNextHourTimestamp(nowMs);
+    const nextHourTs = getNextHourTimestamp(analysisRunMs);
 
     if (forecastRange === "7d") {
       const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
@@ -461,9 +455,13 @@ export default function HomePage() {
       .slice(0, 24);
 
     return nextDayHours.filter((hour) => isCyclingHour(hour.time));
-  }, [forecastRange, nowMs, weather]);
+  }, [analysisRunMs, forecastRange, weather]);
 
   const forecastDays = useMemo(() => {
+    if (analysisRunMs === null) {
+      return [];
+    }
+
     const grouped = new Map<string, typeof visibleWeatherHours>();
 
     visibleWeatherHours.forEach((hour) => {
@@ -482,9 +480,9 @@ export default function HomePage() {
         timeZone: "Europe/Oslo"
       }),
       hours,
-      bestWindow: buildBestWindowFromHours(hours, nowMs)
+      bestWindow: buildBestWindowFromHours(hours, analysisRunMs)
     }));
-  }, [nowMs, visibleWeatherHours]);
+  }, [analysisRunMs, visibleWeatherHours]);
 
   useEffect(() => {
     if (forecastRange !== "7d") {
@@ -516,30 +514,30 @@ export default function HomePage() {
   );
 
   const visibleBestWindow24h = useMemo(() => {
-    if (forecastRange !== "24h") {
+    if (forecastRange !== "24h" || analysisRunMs === null) {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours, nowMs);
-  }, [forecastRange, nowMs, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
+  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
 
   const includeDayInBestWindow24h = useMemo(() => {
-    if (!visibleBestWindow24h) {
+    if (!visibleBestWindow24h || analysisRunMs === null) {
       return false;
     }
 
-    const todayKey = getOsloDayKey(new Date(nowMs).toISOString());
+    const todayKey = getOsloDayKey(new Date(analysisRunMs).toISOString());
     const startDayKey = getOsloDayKey(visibleBestWindow24h.startTime);
     return todayKey !== startDayKey;
-  }, [nowMs, visibleBestWindow24h]);
+  }, [analysisRunMs, visibleBestWindow24h]);
 
   const visibleBestWindow7d = useMemo(() => {
-    if (forecastRange !== "7d") {
+    if (forecastRange !== "7d" || analysisRunMs === null) {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours, nowMs);
-  }, [forecastRange, nowMs, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
+  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
 
   const updatedWeatherAt = useMemo(() => {
     if (!weather) {
