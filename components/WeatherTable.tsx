@@ -106,6 +106,26 @@ function getSymbolEmoji(symbolCode?: string): string {
   return "🌤️";
 }
 
+function getWindGustWarning(windGust?: number): string | null {
+  if (windGust === undefined) {
+    return null;
+  }
+
+  if (windGust >= 20) {
+    return "Svært kraftige kast: unngå landeveissykling.";
+  }
+
+  if (windGust >= 17) {
+    return "Kraftige kast: landeveissykling frarådes.";
+  }
+
+  if (windGust >= 14) {
+    return "Nær 15 m/s: vurder skjermet rute eller å droppe turen.";
+  }
+
+  return null;
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
@@ -126,6 +146,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
         <tbody>
           {hours.map((hour) => {
             const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+            const windGustWarning = getWindGustWarning(hour.windGust);
 
             return (
               <tr key={hour.time} className="border-t border-slate-800">
@@ -144,7 +165,16 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 </td>
                 <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
                 <td className="px-4 py-3">
-                  {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
+                  {hour.windGust !== undefined ? (
+                    <div>
+                      <p>{hour.windGust.toFixed(1)} m/s</p>
+                      {windGustWarning ? (
+                        <p className="mt-1 text-xs text-amber-300">{windGustWarning}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {formatWindDescription(hour.windSpeed, hour.windFromDirection)}

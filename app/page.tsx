@@ -126,7 +126,7 @@ function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow |
     startTime: bestSegment[0].time,
     endTime: bestSegment[bestSegment.length - 1].time,
     averageScore: Math.round(bestAverage),
-    explanation: "Beste synlige tidsvindu basert på gjennomsnittlig sykkelscore."
+    explanation: "Beste synlige tidsvindu basert på gjennomsnittlig værscore."
   };
 }
 
@@ -717,7 +717,7 @@ export default function HomePage() {
 
       {!weather && !weatherLoading && !error && (
         <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
-          Velg et sted for å se værtime-for-time, sykkelscore og dagens beste tidsvindu.
+          Velg et sted for å se værtime-for-time, værscore og dagens beste tidsvindu.
         </section>
       )}
 

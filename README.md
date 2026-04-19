@@ -1,7 +1,7 @@
 # RideSense
 
 RideSense er en webapp som hjelper syklister med å finne gode tidspunkt og ruter basert på vær.
-Appen bruker værprognoser fra MET, kan supplere med lokale stasjonsmålinger, og gir en enkel sykkelscore fra 0 til 100.
+Appen bruker værprognoser fra MET, kan supplere med lokale stasjonsmålinger, og gir en enkel værscore fra 0 til 100.
 
 ## Hva appen gjør nå
 
@@ -11,7 +11,7 @@ Appen bruker værprognoser fra MET, kan supplere med lokale stasjonsmålinger, o
 - Deretter kan du søke etter konkret startadresse i valgt område.
 - Appen bruker flere kilder for å finne relevante treff.
 
-### 2) Vær og sykkelscore
+### 2) Vær og værscore
 
 For valgt startpunkt henter appen timesdata for inntil 7 døgn og viser:
 
@@ -21,7 +21,7 @@ For valgt startpunkt henter appen timesdata for inntil 7 døgn og viser:
 - skydekke
 - værsymbol
 
-Hver time får en **sykkelscore (0–100)**:
+Hver time får en **værscore (0–100)**:
 
 - **75–100**: gode forhold
 - **50–74**: ok forhold
@@ -31,8 +31,12 @@ Scoren bygger på:
 
 - nedbør (trekker ned)
 - vind (trekker ned)
+- vindkast (ekstra trekk ved kraftige kast, hvis vindkast finnes i prognosen)
 - temperatur (best rundt 18–22 °C)
 - skydekke (litt pluss når det er mindre skyer)
+
+Ved vindkast som nærmer seg **15 m/s** bør man vurdere skjermet rute eller å droppe turen.
+Ved vindkast over ca. **17–20 m/s** frarådes normalt landeveissykling.
 
 ### 3) Beste sykkelvindu
 
