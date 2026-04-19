@@ -105,8 +105,11 @@ function getNextHourTimestamp(nowMs: number): number {
   return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
 }
 
-function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
-  const nextHourTs = getNextHourTimestamp(Date.now());
+function buildBestWindowFromHours(
+  hours: WeatherResponse["hours"],
+  nowMs: number = Date.now()
+): BestWindow | null {
+  const nextHourTs = getNextHourTimestamp(nowMs);
   const futureHours = hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
 
   if (futureHours.length === 0) {
@@ -166,12 +169,23 @@ export default function HomePage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [minDistanceKm, setMinDistanceKm] = useState("15");
   const [maxDistanceKm, setMaxDistanceKm] = useState("35");
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   function searchPlace(event: FormEvent): void {
     event.preventDefault();
@@ -430,7 +444,7 @@ export default function HomePage() {
       return [];
     }
 
-    const nextHourTs = getNextHourTimestamp(Date.now());
+    const nextHourTs = getNextHourTimestamp(nowMs);
 
     if (forecastRange === "7d") {
       const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
@@ -447,7 +461,7 @@ export default function HomePage() {
       .slice(0, 24);
 
     return nextDayHours.filter((hour) => isCyclingHour(hour.time));
-  }, [forecastRange, weather]);
+  }, [forecastRange, nowMs, weather]);
 
   const forecastDays = useMemo(() => {
     const grouped = new Map<string, typeof visibleWeatherHours>();
@@ -468,9 +482,9 @@ export default function HomePage() {
         timeZone: "Europe/Oslo"
       }),
       hours,
-      bestWindow: buildBestWindowFromHours(hours)
+      bestWindow: buildBestWindowFromHours(hours, nowMs)
     }));
-  }, [visibleWeatherHours]);
+  }, [nowMs, visibleWeatherHours]);
 
   useEffect(() => {
     if (forecastRange !== "7d") {
@@ -506,26 +520,26 @@ export default function HomePage() {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours);
-  }, [forecastRange, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, nowMs);
+  }, [forecastRange, nowMs, visibleWeatherHours]);
 
   const includeDayInBestWindow24h = useMemo(() => {
     if (!visibleBestWindow24h) {
       return false;
     }
 
-    const todayKey = getOsloDayKey(new Date().toISOString());
+    const todayKey = getOsloDayKey(new Date(nowMs).toISOString());
     const startDayKey = getOsloDayKey(visibleBestWindow24h.startTime);
     return todayKey !== startDayKey;
-  }, [visibleBestWindow24h]);
+  }, [nowMs, visibleBestWindow24h]);
 
   const visibleBestWindow7d = useMemo(() => {
     if (forecastRange !== "7d") {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours);
-  }, [forecastRange, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, nowMs);
+  }, [forecastRange, nowMs, visibleWeatherHours]);
 
   const updatedWeatherAt = useMemo(() => {
     if (!weather) {
