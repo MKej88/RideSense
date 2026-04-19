@@ -523,35 +523,84 @@ export default function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
-        <h1 className="text-3xl font-bold">RideSense</h1>
-        <p className="mt-2 text-sm text-sky-50">
-          Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
-        </p>
+      <section className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-slate-950 p-6 shadow-[0_20px_60px_-30px_rgba(6,182,212,0.45)]">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.08)_1px,transparent_1px)] bg-[size:32px_32px]" />
+          <div className="absolute -left-16 top-[-120px] h-56 w-56 rounded-full bg-cyan-400/20 blur-3xl" />
+          <div className="absolute -right-20 bottom-[-120px] h-64 w-64 rounded-full bg-teal-400/20 blur-3xl" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-900/40" />
+        </div>
 
-        <div className="mt-5 inline-flex rounded-xl bg-slate-900/20 p-1">
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              activeTab === "forecast"
-                ? "bg-slate-900 text-slate-100"
-                : "text-white hover:bg-slate-900/20"
-            }`}
-            onClick={() => setActiveTab("forecast")}
-          >
-            Vær og tidspunkt
-          </button>
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              activeTab === "routes"
-                ? "bg-slate-900 text-slate-100"
-                : "text-white hover:bg-slate-900/20"
-            }`}
-            onClick={() => setActiveTab("routes")}
-          >
-            Ruteanalyse
-          </button>
+        <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/60 px-3 py-1 text-xs font-medium text-cyan-200 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
+              Smart sykkelprognose
+            </div>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">RideSense</h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-200 md:text-base">
+              Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
+            </p>
+
+            <div className="mt-5 inline-flex rounded-xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur">
+              <button
+                type="button"
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  activeTab === "forecast"
+                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+                    : "text-slate-200 hover:bg-cyan-400/10"
+                }`}
+                onClick={() => setActiveTab("forecast")}
+              >
+                Vær og tidspunkt
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  activeTab === "routes"
+                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+                    : "text-slate-200 hover:bg-cyan-400/10"
+                }`}
+                onClick={() => setActiveTab("routes")}
+              >
+                Ruteanalyse
+              </button>
+            </div>
+          </div>
+
+          <div className="relative hidden h-44 rounded-2xl border border-cyan-300/20 bg-slate-900/45 p-4 backdrop-blur lg:block">
+            <svg viewBox="0 0 320 180" className="h-full w-full" aria-hidden="true">
+              <defs>
+                <linearGradient id="routeGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.15" />
+                  <stop offset="50%" stopColor="#2dd4bf" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.2" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M15 142 C60 98, 96 82, 132 94 S206 134, 304 44"
+                fill="none"
+                stroke="url(#routeGlow)"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <circle cx="15" cy="142" r="5" fill="#22d3ee" />
+              <circle cx="304" cy="44" r="6" fill="#2dd4bf" />
+              <g transform="translate(92 46)">
+                <circle cx="0" cy="0" r="22" fill="rgba(15,23,42,0.9)" stroke="#22d3ee" strokeOpacity="0.5" />
+                <path d="M0 -12 V0 L8 6" stroke="#67e8f9" strokeWidth="2" strokeLinecap="round" fill="none" />
+              </g>
+              <g transform="translate(188 118)">
+                <circle cx="0" cy="0" r="22" fill="rgba(15,23,42,0.9)" stroke="#22d3ee" strokeOpacity="0.5" />
+                <path d="M-10 2h20M-6-4h12" stroke="#5eead4" strokeWidth="2" strokeLinecap="round" />
+              </g>
+              <g transform="translate(248 84)">
+                <circle cx="-10" cy="22" r="14" stroke="#67e8f9" strokeWidth="2" fill="none" />
+                <circle cx="18" cy="22" r="14" stroke="#67e8f9" strokeWidth="2" fill="none" />
+                <path d="M-10 22l13-13h11l14 13M3 9l-7-6h-9" stroke="#2dd4bf" strokeWidth="2" fill="none" strokeLinecap="round" />
+              </g>
+            </svg>
+          </div>
         </div>
       </section>
 
