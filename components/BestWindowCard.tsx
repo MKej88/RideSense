@@ -79,7 +79,7 @@ export function BestWindowCard({
       <p className="mt-2 text-2xl font-bold text-slate-100">
         {formatBestWindowLabel(bestWindow.startTime, bestWindow.endTime, includeDay)}
       </p>
-      <p className="mt-1 text-sm text-slate-300">Gjennomsnittlig sykkelscore: {bestWindow.averageScore}/100</p>
+      <p className="mt-1 text-sm text-slate-300">Gjennomsnittlig værscore: {bestWindow.averageScore}/100</p>
       <p className="mt-2 text-sm text-slate-400">{bestWindow.explanation}</p>
     </div>
   );
