@@ -18,7 +18,13 @@ function sanitizeSymbolCode(input: string | null): string {
     return "unknown";
   }
 
-  return normalized.replace(/[^a-z0-9_]/g, "");
+  const sanitized = normalized.replace(/[^a-z0-9_]/g, "");
+
+  if (!sanitized) {
+    return "unknown";
+  }
+
+  return sanitized;
 }
 
 async function readSymbolFile(fileName: string): Promise<string> {
