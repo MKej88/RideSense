@@ -18,6 +18,8 @@ RideSense er en produksjonsklar MVP bygget med Next.js som hjelper landeveissykl
   - gul = greie forhold
   - rød = dårlige forhold
 - Finner og viser `Beste tidspunkt i dag`.
+- Viser om vurderingen bygger på `kun prognose` eller `prognose + observasjon`.
+- Beregner en enkel indikator for datatillit per time.
 - Kort forklaring på hvorfor tidsvinduet er best.
 - Feilhåndtering, tomtilstand og enkel responsiv UI.
 - Interaktivt kart med OpenStreetMap-kartlag og flyttbar markør.
@@ -54,6 +56,7 @@ Opprett en fil `.env.local` i prosjektroten:
 ```env
 MET_USER_AGENT="RideSense/1.0 din-epost@domene.no"
 GEOCODE_USER_AGENT="RideSense/1.0 din-epost@domene.no"
+NETATMO_ACCESS_TOKEN="valgfri-oauth-token-for-offentlige-stasjoner"
 ```
 
 > `User-Agent` er anbefalt av både MET og Nominatim.
@@ -156,10 +159,30 @@ Ruteanalyse bygger videre på den samme timescoren som brukes for enkeltsteder, 
 
 Dette gjør at ruteanalysen fortsatt er enkel, men den tar høyde for at værforhold kan variere underveis på samme tur.
 
+## Værstasjoner som supplement til prognose
+
+RideSense kan bruke observasjoner fra **Netatmo Weathermap** som et tillegg til MET-prognosen.
+Dette er laget som et eget lag i arkitekturen (`lib/station-observations.ts`) for å holde
+stasjonsdata og prognosedata tydelig atskilt.
+
+Slik fungerer det:
+
+1. Appen henter alltid prognose fra MET (hovedkilde).
+2. Hvis `NETATMO_ACCESS_TOKEN` er satt og en offentlig stasjon finnes i nærheten, hentes siste observasjon.
+3. Observasjonen brukes kun som supplement i de nærmeste timene.
+4. Hvis observasjon og prognose avviker tydelig, trekkes score noe ned og datatillit justeres.
+5. Hvis observasjon mangler, går appen automatisk videre med kun prognose (ingen hard avhengighet).
+
+I UI vises derfor eksplisitt om vurderingen bygger på:
+
+- `kun prognose`
+- `prognose + observasjon`
+
 ## Arkitekturvalg
 
 - **UI-komponenter**: ligger i `components/`
 - **Datainnhenting**: `lib/weather.ts` + API-ruter i `app/api/`
+- **Stasjonsobservasjoner**: `lib/station-observations.ts` (valgfritt supplement)
 - **Scoringslogikk**: `lib/scoring.ts`
 - **Ruteanalyse**: `lib/route-analysis.ts` + `data/routes/`
 - **Typer/interfaces**: `lib/types.ts`

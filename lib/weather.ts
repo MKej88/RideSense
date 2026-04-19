@@ -1,8 +1,10 @@
 import { calculateBikeScore, findBestWindowToday } from "@/lib/scoring";
+import { fetchNearestStationObservation } from "@/lib/station-observations";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
 const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
 const MET_FETCH_TIMEOUT_MS = 4000;
+const OBSERVATION_MAX_AGE_HOURS = 2;
 
 function asFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -42,6 +44,14 @@ function resolveWindGust(
   return undefined;
 }
 
+function shouldUseObservation(hourTime: string, observedAt: string): boolean {
+  const diffHours =
+    Math.abs(new Date(hourTime).getTime() - new Date(observedAt).getTime()) /
+    (1000 * 60 * 60);
+
+  return diffHours <= OBSERVATION_MAX_AGE_HOURS;
+}
+
 export async function fetchForecastForLocation(
   lat: number,
   lon: number,
@@ -74,6 +84,7 @@ export async function fetchForecastForLocation(
     throw new Error("Uventet datastruktur fra værleverandør.");
   }
 
+  const observation = await fetchNearestStationObservation(lat, lon);
   const hoursRaw: WeatherHourRaw[] = series.slice(0, 24).map((entry: any) => {
     const details = entry?.data?.instant?.details;
     const next1h = entry?.data?.next_1_hours?.details;
@@ -90,12 +101,30 @@ export async function fetchForecastForLocation(
     };
   });
 
-  const scoredHours: ScoredWeatherHour[] = hoursRaw.map(calculateBikeScore);
+  const scoredHours: ScoredWeatherHour[] = hoursRaw.map((hour) =>
+    calculateBikeScore(
+      hour,
+      observation && shouldUseObservation(hour.time, observation.observedAt)
+        ? observation
+        : null
+    )
+  );
+
+  const hasObservation = scoredHours.some(
+    (hour) => hour.dataBasis === "forecast_plus_observation"
+  );
 
   return {
     locationLabel,
     timezone: "Europe/Oslo",
     hours: scoredHours,
-    bestWindowToday: findBestWindowToday(scoredHours)
+    bestWindowToday: findBestWindowToday(scoredHours),
+    dataBasis: hasObservation ? "forecast_plus_observation" : "forecast_only",
+    observationSummary: {
+      used: hasObservation,
+      sourceName: "Netatmo Weathermap",
+      stationName: observation?.stationName,
+      observedAt: observation?.observedAt
+    }
   };
 }

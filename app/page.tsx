@@ -581,6 +581,19 @@ export default function HomePage() {
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
             <p className="text-sm text-slate-600">Neste 24 timer</p>
+            <p className="mt-2 text-sm text-slate-700">
+              Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
+                ? "prognose + observasjon"
+                : "kun prognose"}
+            </p>
+            <p className="text-xs text-slate-500">
+              {weather.observationSummary.used
+                ? `Observasjon fra ${weather.observationSummary.sourceName} (${weather.observationSummary.stationName || "ukjent stasjon"}).`
+                : weather.observationSummary.stationName &&
+                    weather.observationSummary.observedAt
+                  ? `Fant observasjon fra ${weather.observationSummary.stationName}, men den er for gammel for timescoren. Appen bruker derfor kun prognose akkurat nå.`
+                  : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
+            </p>
           </div>
           <BestWindowCard bestWindow={weather.bestWindowToday} />
           <WeatherTable hours={weather.hours} />

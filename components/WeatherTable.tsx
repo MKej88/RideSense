@@ -16,6 +16,18 @@ function formatDirection(direction?: number): string {
   return `${Math.round(direction)}°`;
 }
 
+function formatConfidence(level: "high" | "medium" | "low", score: number): string {
+  if (level === "high") {
+    return `Høy (${score})`;
+  }
+
+  if (level === "medium") {
+    return `Middels (${score})`;
+  }
+
+  return `Lav (${score})`;
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -28,6 +40,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             <th className="px-4 py-3">Vind</th>
             <th className="px-4 py-3">Vindkast</th>
             <th className="px-4 py-3">Retning</th>
+            <th className="px-4 py-3">Datatillit</th>
             <th className="px-4 py-3">Score</th>
           </tr>
         </thead>
@@ -42,6 +55,9 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
               </td>
               <td className="px-4 py-3">{formatDirection(hour.windFromDirection)}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {formatConfidence(hour.confidence.level, hour.confidence.score)}
+              </td>
               <td className="px-4 py-3">
                 <ScoreBadge label={hour.scoreLabel} score={hour.score} />
               </td>
