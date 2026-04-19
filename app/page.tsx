@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { BestWindow, GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
 
 interface ApiError {
   error: string;
@@ -51,6 +51,35 @@ function getOsloDayKey(time: string): string {
     month: "2-digit",
     day: "2-digit"
   });
+}
+
+function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
+  if (hours.length === 0) {
+    return null;
+  }
+
+  const windowSize = Math.min(3, hours.length);
+  let bestStartIndex = 0;
+  let bestAverage = -1;
+
+  for (let index = 0; index <= hours.length - windowSize; index += 1) {
+    const segment = hours.slice(index, index + windowSize);
+    const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
+
+    if (average > bestAverage) {
+      bestAverage = average;
+      bestStartIndex = index;
+    }
+  }
+
+  const bestSegment = hours.slice(bestStartIndex, bestStartIndex + windowSize);
+
+  return {
+    startTime: bestSegment[0].time,
+    endTime: bestSegment[bestSegment.length - 1].time,
+    averageScore: Math.round(bestAverage),
+    explanation: "Beste synlige tidsvindu basert på gjennomsnittlig sykkelscore."
+  };
 }
 
 export default function HomePage() {
@@ -412,6 +441,14 @@ export default function HomePage() {
     return selectedDay?.hours || [];
   }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
 
+  const visibleBestWindow24h = useMemo(() => {
+    if (forecastRange !== "24h") {
+      return null;
+    }
+
+    return buildBestWindowFromHours(visibleWeatherHours);
+  }, [forecastRange, visibleWeatherHours]);
+
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
       const movedPlace: GeocodeResult = {
@@ -603,9 +640,7 @@ export default function HomePage() {
 
             <div className="mt-4">
               <BestWindowCard
-                bestWindow={
-                  forecastRange === "24h" ? weather.bestWindowToday : weather.bestWindowNext7Days
-                }
+                bestWindow={forecastRange === "24h" ? visibleBestWindow24h : weather.bestWindowNext7Days}
                 title={
                   forecastRange === "24h"
                     ? "Beste tidspunkt i dag"
