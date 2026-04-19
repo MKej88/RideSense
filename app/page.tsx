@@ -29,6 +29,23 @@ const WeatherTable = dynamic(
 
 const PLACE_SEARCH_DEBOUNCE_MS = 180;
 const ADDRESS_SEARCH_DEBOUNCE_MS = 180;
+const QUICK_CITIES: GeocodeResult[] = [
+  { name: "Oslo", lat: 59.9139, lon: 10.7522 },
+  { name: "Bærum", lat: 59.8939, lon: 10.523 },
+  { name: "Drammen", lat: 59.7439, lon: 10.2045 },
+  { name: "Kristiansand", lat: 58.1467, lon: 7.9956 },
+  { name: "Arendal", lat: 58.4615, lon: 8.7725 },
+  { name: "Grimstad", lat: 58.3405, lon: 8.5934 },
+  { name: "Bergen", lat: 60.39299, lon: 5.32415 },
+  { name: "Stavanger", lat: 58.97, lon: 5.7331 },
+  { name: "Sandnes", lat: 58.8518, lon: 5.7362 },
+  { name: "Trondheim", lat: 63.4305, lon: 10.3951 },
+  { name: "Stjørdal", lat: 63.468, lon: 10.927 },
+  { name: "Steinkjer", lat: 64.015, lon: 11.4954 },
+  { name: "Tromsø", lat: 69.6492, lon: 18.9553 },
+  { name: "Bodø", lat: 67.2804, lon: 14.4049 },
+  { name: "Harstad", lat: 68.7985, lon: 16.5418 }
+];
 
 function getAreaContextLabel(place: GeocodeResult): string {
   const primaryName = place.name.split(",")[0]?.trim();
@@ -493,33 +510,6 @@ export default function HomePage() {
     [loadWeatherForPlace]
   );
 
-  function useMyLocation(): void {
-    setError(null);
-
-    if (!("geolocation" in navigator)) {
-      setError("Nettleseren støtter ikke posisjonstjenester.");
-      return;
-    }
-
-      setWeatherLoading(true);
-      navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const currentPlace: GeocodeResult = {
-          name: "Min posisjon",
-          lat: position.coords.latitude,
-          lon: position.coords.longitude
-        };
-        setSelectedArea(currentPlace);
-        await loadWeatherForPlace(currentPlace);
-      },
-      () => {
-        setError("Fikk ikke tilgang til posisjon. Sjekk nettleserinnstillinger.");
-        setWeatherLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  }
-
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
       <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
@@ -586,15 +576,26 @@ export default function HomePage() {
           >
             Søk
           </button>
-          <button
-            type="button"
-            onClick={useMyLocation}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-            disabled={weatherLoading || addressLoading || placeLoading}
-          >
-            Bruk min posisjon
-          </button>
         </form>
+        <div className="mt-4">
+          <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
+          <div className="grid grid-cols-5 gap-2">
+            {QUICK_CITIES.map((city) => (
+              <button
+                key={`${city.name}-${city.lat}-${city.lon}`}
+                type="button"
+                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+                onClick={() => {
+                  chooseArea(city);
+                  void loadWeatherForPlace(city);
+                }}
+                disabled={weatherLoading || addressLoading || placeLoading}
+              >
+                {city.name}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
 
