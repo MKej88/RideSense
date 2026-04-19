@@ -1,5 +1,6 @@
 import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
+import Image from "next/image";
 
 function formatHour(time: string): string {
   return new Date(time).toLocaleString("nb-NO", {
@@ -69,6 +70,14 @@ function formatSymbol(symbolCode?: string): string {
   return symbolCode.replaceAll("_", " ");
 }
 
+function getSymbolIconUrl(symbolCode?: string): string | null {
+  if (!symbolCode) {
+    return null;
+  }
+
+  return `https://api.met.no/images/weathericons/svg/${symbolCode}.svg`;
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
@@ -87,23 +96,44 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
           </tr>
         </thead>
         <tbody>
-          {hours.map((hour) => (
-            <tr key={hour.time} className="border-t border-slate-800">
-              <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
-              <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
-              <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
-              <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
-              <td className="px-4 py-3 capitalize">{formatSymbol(hour.symbolCode)}</td>
-              <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
-              <td className="px-4 py-3">
-                {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
-              </td>
-              <td className="px-4 py-3">{formatWindDescription(hour.windSpeed, hour.windFromDirection)}</td>
-              <td className="px-4 py-3">
-                <ScoreBadge label={hour.scoreLabel} score={hour.score} />
-              </td>
-            </tr>
-          ))}
+          {hours.map((hour) => {
+            const symbolIconUrl = getSymbolIconUrl(hour.symbolCode);
+
+            return (
+              <tr key={hour.time} className="border-t border-slate-800">
+                <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
+                <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
+                <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
+                <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
+                <td className="px-4 py-3">
+                  {symbolIconUrl ? (
+                    <div className="flex items-center gap-2">
+                      <Image
+                        src={symbolIconUrl}
+                        alt={formatSymbol(hour.symbolCode)}
+                        width={28}
+                        height={28}
+                        className="h-7 w-7"
+                      />
+                      <span className="capitalize">{formatSymbol(hour.symbolCode)}</span>
+                    </div>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
+                <td className="px-4 py-3">
+                  {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
+                </td>
+                <td className="px-4 py-3">
+                  {formatWindDescription(hour.windSpeed, hour.windFromDirection)}
+                </td>
+                <td className="px-4 py-3">
+                  <ScoreBadge label={hour.scoreLabel} score={hour.score} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
