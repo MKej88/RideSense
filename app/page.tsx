@@ -675,6 +675,16 @@ export default function HomePage() {
                 />
               </div>
             )}
+            {forecastRange === "7d" && (
+              <div className="mt-4">
+                <BestWindowCard
+                  bestWindow={weather.bestWindowNext7Days}
+                  title="Beste tidspunkt neste 7 dager"
+                  emptyMessage="Fant ikke tilgjengelige timer i de neste 7 dagene."
+                  includeDay
+                />
+              </div>
+            )}
 
             <p className="mt-2 text-sm text-slate-400">
               {forecastRange === "24h"
