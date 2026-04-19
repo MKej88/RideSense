@@ -673,6 +673,24 @@ export default function HomePage() {
                   ? `Fant observasjon fra ${weather.observationSummary.stationName}, men den er for gammel for timescoren. Appen bruker derfor kun prognose akkurat nå.`
                   : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
             </p>
+
+            <div className="mt-4 rounded-lg border border-sky-100 bg-sky-50 p-3 text-sm text-slate-700">
+              <h3 className="font-semibold text-slate-900">Slik beregnes scoren</h3>
+              <p className="mt-1">
+                <strong>100 poeng</strong> betyr perfekt sykkelvær:
+                <strong> 18–22 °C</strong>, sol (lite skyer), vindstille og tørt.
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Temperatur: opptil 40 poeng (full pott i 18–22 °C).</li>
+                <li>Sol/skydekke: opptil 20 poeng (færre skyer gir høyere score).</li>
+                <li>Vind: opptil 20 poeng (lav vind gir høyere score).</li>
+                <li>Nedbør: opptil 20 poeng (tørt gir høyest score).</li>
+              </ul>
+              <p className="mt-2 text-xs text-slate-600">
+                Kraftige vindkast og store avvik mot lokale observasjoner kan trekke scoren
+                litt ekstra ned.
+              </p>
+            </div>
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (

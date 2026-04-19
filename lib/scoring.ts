@@ -9,13 +9,16 @@ import {
 interface ScoreThresholds {
   idealTempMin: number;
   idealTempMax: number;
-  coldPenaltyStart: number;
-  heatPenaltyStart: number;
+  tempMinLimit: number;
+  tempMaxLimit: number;
   moderateWindStart: number;
   strongWindStart: number;
-  gustPenaltyStart: number;
+  windCalmMax: number;
+  windMaxLimit: number;
   lightRainStart: number;
   heavyRainStart: number;
+  rainMaxLimit: number;
+  cloudCoverIdealMax: number;
 }
 
 interface ObservationDelta {
@@ -26,15 +29,18 @@ interface ObservationDelta {
 
 // Terskler samlet på ett sted for enkel justering i senere versjoner.
 export const SCORE_THRESHOLDS: ScoreThresholds = {
-  idealTempMin: 12,
+  idealTempMin: 18,
   idealTempMax: 22,
-  coldPenaltyStart: 5,
-  heatPenaltyStart: 26,
+  tempMinLimit: 0,
+  tempMaxLimit: 35,
   moderateWindStart: 7,
   strongWindStart: 11,
-  gustPenaltyStart: 14,
+  windCalmMax: 0,
+  windMaxLimit: 12,
   lightRainStart: 0.3,
-  heavyRainStart: 1.5
+  heavyRainStart: 1.5,
+  rainMaxLimit: 6,
+  cloudCoverIdealMax: 10
 };
 
 export function getScoreLabel(score: number): ScoreLabel {
@@ -152,85 +158,98 @@ function buildConfidence(
   };
 }
 
-function calculateTemperaturePenalty(temperature: number): number {
+function clampToUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function calculateTemperatureScore(temperature: number): number {
   if (
     temperature >= SCORE_THRESHOLDS.idealTempMin &&
     temperature <= SCORE_THRESHOLDS.idealTempMax
   ) {
-    return 0;
+    return 1;
   }
 
   if (temperature < SCORE_THRESHOLDS.idealTempMin) {
-    return (SCORE_THRESHOLDS.idealTempMin - temperature) * 1.6;
+    const numerator = temperature - SCORE_THRESHOLDS.tempMinLimit;
+    const denominator = SCORE_THRESHOLDS.idealTempMin - SCORE_THRESHOLDS.tempMinLimit;
+    return clampToUnit(numerator / denominator);
   }
 
-  return (temperature - SCORE_THRESHOLDS.idealTempMax) * 1.8;
+  const numerator = SCORE_THRESHOLDS.tempMaxLimit - temperature;
+  const denominator = SCORE_THRESHOLDS.tempMaxLimit - SCORE_THRESHOLDS.idealTempMax;
+  return clampToUnit(numerator / denominator);
 }
 
-function calculateRainPenalty(precipitationAmount: number): number {
-  return Math.min(45, Math.sqrt(Math.max(0, precipitationAmount)) * 22);
-}
-
-function calculateWindPenalty(windSpeed: number): number {
-  const calmWindThreshold = 4;
-
-  if (windSpeed <= calmWindThreshold) {
-    return 0;
+function calculateSunScore(cloudCoverPercentage: number | undefined): number {
+  if (cloudCoverPercentage === undefined) {
+    return 0.7;
   }
 
-  return Math.min(35, (windSpeed - calmWindThreshold) * 3.2);
+  return clampToUnit(1 - cloudCoverPercentage / 100);
 }
 
-function calculateGustPenalty(
-  windGust: number | undefined,
-  windSpeed: number
-): number {
+function calculateWindScore(windSpeed: number): number {
+  const numerator = SCORE_THRESHOLDS.windMaxLimit - windSpeed;
+  const denominator = SCORE_THRESHOLDS.windMaxLimit - SCORE_THRESHOLDS.windCalmMax;
+  return clampToUnit(numerator / denominator);
+}
+
+function calculateRainScore(precipitationAmount: number): number {
+  return clampToUnit(1 - precipitationAmount / SCORE_THRESHOLDS.rainMaxLimit);
+}
+
+function calculateGustPenalty(windGust: number | undefined, windSpeed: number): number {
   if (windGust === undefined) {
     return 0;
   }
 
   const extraGust = Math.max(0, windGust - windSpeed);
-  return Math.min(12, extraGust * 1.2);
+  return Math.min(10, extraGust * 1.1);
 }
 
 export function calculateBikeScore(
   hour: WeatherHourRaw,
   observation: StationObservation | null = null
 ): ScoredWeatherHour {
-  let penalty = 0;
   const reasons: string[] = [];
+  const temperatureScore = calculateTemperatureScore(hour.airTemperature);
+  const sunScore = calculateSunScore(hour.cloudCoverPercentage);
+  const windScore = calculateWindScore(hour.windSpeed);
+  const rainScore = calculateRainScore(hour.precipitationAmount);
 
-  const rainPenalty = calculateRainPenalty(hour.precipitationAmount);
-  penalty += rainPenalty;
-  if (rainPenalty >= 25) {
-    reasons.push("kraftig nedbør trekker mye ned");
-  } else if (rainPenalty >= 8) {
-    reasons.push("lett nedbør trekker ned");
+  const baseScore =
+    temperatureScore * 40 + sunScore * 20 + windScore * 20 + rainScore * 20;
+  const gustPenalty = calculateGustPenalty(hour.windGust, hour.windSpeed);
+
+  if (hour.airTemperature < SCORE_THRESHOLDS.idealTempMin) {
+    reasons.push("temperaturen er under idealområdet 18–22 °C");
+  } else if (hour.airTemperature > SCORE_THRESHOLDS.idealTempMax) {
+    reasons.push("temperaturen er over idealområdet 18–22 °C");
   }
 
-  const windPenalty = calculateWindPenalty(hour.windSpeed);
-  penalty += windPenalty;
-  if (windPenalty >= 20) {
+  if (hour.cloudCoverPercentage !== undefined) {
+    if (hour.cloudCoverPercentage > 70) {
+      reasons.push("mye skyer trekker ned sol-scoren");
+    } else if (hour.cloudCoverPercentage > SCORE_THRESHOLDS.cloudCoverIdealMax) {
+      reasons.push("delvis skydekke reduserer sol-scoren");
+    }
+  }
+
+  if (hour.windSpeed > SCORE_THRESHOLDS.strongWindStart) {
     reasons.push("sterk vind gjør forholdene krevende");
-  } else if (windPenalty >= 8) {
+  } else if (hour.windSpeed > SCORE_THRESHOLDS.moderateWindStart) {
     reasons.push("moderat vind trekker ned");
   }
 
-  const gustPenalty = calculateGustPenalty(hour.windGust, hour.windSpeed);
-  penalty += gustPenalty;
-  if (gustPenalty >= 6) {
-    reasons.push("vindkast gir uforutsigbare forhold");
+  if (hour.precipitationAmount >= SCORE_THRESHOLDS.heavyRainStart) {
+    reasons.push("nedbør trekker scoren ned");
+  } else if (hour.precipitationAmount >= SCORE_THRESHOLDS.lightRainStart) {
+    reasons.push("lett nedbør trekker litt ned");
   }
 
-  penalty += calculateTemperaturePenalty(hour.airTemperature);
-  if (hour.airTemperature < SCORE_THRESHOLDS.coldPenaltyStart) {
-    reasons.push("kald temperatur");
-  } else if (hour.airTemperature < SCORE_THRESHOLDS.idealTempMin) {
-    reasons.push("litt kjølig temperatur");
-  } else if (hour.airTemperature > SCORE_THRESHOLDS.heatPenaltyStart + 4) {
-    reasons.push("svært høy temperatur");
-  } else if (hour.airTemperature > SCORE_THRESHOLDS.heatPenaltyStart) {
-    reasons.push("varm temperatur");
+  if (gustPenalty >= 5) {
+    reasons.push("vindkast gir mer uforutsigbare forhold");
   }
 
   let dataBasis: "forecast_only" | "forecast_plus_observation" = "forecast_only";
@@ -244,7 +263,6 @@ export function calculateBikeScore(
     const penaltyResult = calculateObservationPenalty(delta);
 
     observationPenalty = penaltyResult.penalty;
-    penalty += observationPenalty;
 
     if (penaltyResult.reason) {
       reasons.push(penaltyResult.reason);
@@ -256,7 +274,10 @@ export function calculateBikeScore(
     stationDistanceKm = observation.distanceKm;
   }
 
-  const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
+  const score = Math.max(
+    0,
+    Math.min(100, Math.round(baseScore - gustPenalty - observationPenalty))
+  );
   const confidence = buildConfidence(
     observation !== null,
     observationPenalty,
