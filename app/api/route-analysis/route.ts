@@ -1,35 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzePredefinedRoutes } from "@/lib/route-analysis";
+import { analyzeCustomRouteWind } from "@/lib/custom-route-analysis";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const lat = Number(request.nextUrl.searchParams.get("lat"));
-  const lon = Number(request.nextUrl.searchParams.get("lon"));
-  const label = request.nextUrl.searchParams.get("label") || "Valgt sted";
-  const minKm = Number(request.nextUrl.searchParams.get("minKm"));
-  const maxKm = Number(request.nextUrl.searchParams.get("maxKm"));
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json(
-      { error: "Ugyldig posisjon for ruteanalyse." },
-      { status: 400 }
-    );
-  }
+  const startLat = Number(request.nextUrl.searchParams.get("startLat"));
+  const startLon = Number(request.nextUrl.searchParams.get("startLon"));
+  const startLabel = request.nextUrl.searchParams.get("startLabel") || "Start";
+  const endLat = Number(request.nextUrl.searchParams.get("endLat"));
+  const endLon = Number(request.nextUrl.searchParams.get("endLon"));
+  const endLabel = request.nextUrl.searchParams.get("endLabel") || "Slutt";
 
   if (
-    !Number.isFinite(minKm) ||
-    !Number.isFinite(maxKm) ||
-    minKm <= 0 ||
-    maxKm <= 0 ||
-    minKm > maxKm
+    !Number.isFinite(startLat) ||
+    !Number.isFinite(startLon) ||
+    !Number.isFinite(endLat) ||
+    !Number.isFinite(endLon)
   ) {
     return NextResponse.json(
-      { error: "Ugyldig min/maks km for ruteanalyse." },
+      { error: "Ugyldig start/slutt-posisjon for ruteanalyse." },
       { status: 400 }
     );
   }
 
   try {
-    const analysis = await analyzePredefinedRoutes(lat, lon, label, minKm, maxKm);
+    const analysis = await analyzeCustomRouteWind(
+      {
+        name: startLabel,
+        lat: startLat,
+        lon: startLon
+      },
+      {
+        name: endLabel,
+        lat: endLat,
+        lon: endLon
+      }
+    );
 
     return NextResponse.json(analysis, {
       headers: {
@@ -42,7 +46,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ? error.message === "fetch failed"
           ? "En ekstern karttjeneste svarte ikke. Prøv igjen."
           : error.message
-        : "Noe gikk galt ved analyse av rutene.";
+        : "Noe gikk galt ved analyse av ruten.";
 
     return NextResponse.json(
       { error: message },

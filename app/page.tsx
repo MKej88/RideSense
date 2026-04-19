@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BestWindow, GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { BestWindow, GeocodeResult, RouteWindAnalysisResponse, WeatherResponse } from "@/lib/types";
 
 interface ApiError {
   error: string;
@@ -19,9 +19,6 @@ const LocationMap = dynamic(
     ),
     ssr: false
   }
-);
-const RouteAnalysisPanel = dynamic(
-  () => import("@/components/RouteAnalysisPanel").then((module) => module.RouteAnalysisPanel)
 );
 const ScoreModelInfo = dynamic(
   () => import("@/components/ScoreModelInfo").then((module) => module.ScoreModelInfo)
@@ -163,12 +160,11 @@ export default function HomePage() {
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResponse | null>(null);
+  const [routeAnalysis, setRouteAnalysis] = useState<RouteWindAnalysisResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [minDistanceKm, setMinDistanceKm] = useState("15");
-  const [maxDistanceKm, setMaxDistanceKm] = useState("35");
+  const [routeStart, setRouteStart] = useState<GeocodeResult | null>(null);
+  const [routeEnd, setRouteEnd] = useState<GeocodeResult | null>(null);
   const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
@@ -190,7 +186,6 @@ export default function HomePage() {
     setSelected(null);
     setWeather(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
     setRouteError(null);
     setAnalysisRunMs(null);
     setResults([]);
@@ -355,7 +350,6 @@ export default function HomePage() {
     setSelected(place);
     setWeather(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
     setAnalysisRunMs(null);
 
     try {
@@ -382,56 +376,38 @@ export default function HomePage() {
   }, []);
 
   const analyzeRoutes = useCallback(async (): Promise<void> => {
-    if (!selected) {
-      setRouteError("Velg en startplass før du analyserer ruter.");
-      return;
-    }
-
-    const minKm = Number(minDistanceKm);
-    const maxKm = Number(maxDistanceKm);
-
-    if (!Number.isFinite(minKm) || !Number.isFinite(maxKm) || minKm <= 0 || maxKm <= 0) {
-      setRouteError("Min og maks km må være gyldige positive tall.");
-      return;
-    }
-
-    if (minKm > maxKm) {
-      setRouteError("Min km kan ikke være større enn maks km.");
+    if (!routeStart || !routeEnd) {
+      setRouteError("Velg både startadresse og stopadresse før analyse.");
       return;
     }
 
     setRouteLoading(true);
     setRouteError(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
 
     try {
       const response = await fetch(
-        `/api/route-analysis?lat=${selected.lat}&lon=${selected.lon}&label=${encodeURIComponent(
-          selected.name
-        )}&minKm=${minKm}&maxKm=${maxKm}`
+        `/api/route-analysis?startLat=${routeStart.lat}&startLon=${routeStart.lon}&startLabel=${encodeURIComponent(
+          routeStart.name
+        )}&endLat=${routeEnd.lat}&endLon=${routeEnd.lon}&endLabel=${encodeURIComponent(routeEnd.name)}`
       );
-      const payload = (await response.json()) as RouteAnalysisResponse & ApiError;
+      const payload = (await response.json()) as RouteWindAnalysisResponse & ApiError;
 
       if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å analysere rutene.");
+        throw new Error(payload.error || "Klarte ikke å analysere ruten.");
       }
 
+      setAnalysisRunMs(Date.now());
       setRouteAnalysis(payload);
-      setSelectedRouteId(payload.bestRouteId ?? payload.routes[0]?.route.id ?? null);
     } catch (caughtError) {
       setRouteError(
         caughtError instanceof Error ? caughtError.message : "Ukjent feil ved ruteanalyse."
       );
       setRouteAnalysis(null);
-      setSelectedRouteId(null);
     } finally {
       setRouteLoading(false);
     }
-  }, [maxDistanceKm, minDistanceKm, selected]);
-
-  const selectedRoute =
-    routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
+  }, [routeEnd, routeStart]);
 
   const visibleWeatherHours = useMemo(() => {
     if (!weather || analysisRunMs === null) {
@@ -687,7 +663,6 @@ export default function HomePage() {
                 setSelected(null);
                 setWeather(null);
                 setRouteAnalysis(null);
-                setSelectedRouteId(null);
                 setRouteError(null);
               }
             }}
@@ -880,41 +855,45 @@ export default function HomePage() {
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
+              Legg inn startadresse og stopadresse. Vi finner beste tidspunkt for akkurat denne
+              ruten de neste 24 timene og neste 7 dagene, og gir ekstra poeng ved medvind.
             </p>
-
             <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <h3 className="text-base font-semibold text-slate-100">Startadresse (kun ruteanalyse)</h3>
+              <h3 className="text-base font-semibold text-slate-100">Start og stopp</h3>
               <p className="mt-1 text-sm text-slate-400">
-                Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
+                Bruk valgt sted som start, og velg stopp fra adressesøket.
               </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-60"
+                  onClick={() => setRouteStart(selected)}
+                  disabled={!selected}
+                >
+                  {routeStart ? `Start: ${routeStart.name}` : "Sett start fra valgt sted"}
+                </button>
+                <input
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+                  placeholder={
+                    selectedArea
+                      ? `Søk stopadresse i ${selectedArea.name}`
+                      : "Velg sted på hovedfanen først"
+                  }
+                  value={addressQuery}
+                  onChange={(event) => {
+                    setAddressQuery(event.target.value);
+                    setAddressError(null);
+                    setRouteEnd(null);
+                    setRouteAnalysis(null);
+                  }}
+                  disabled={!selectedArea}
+                />
+              </div>
 
-              <input
-                className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                placeholder={
-                  selectedArea
-                    ? `Søk adresse i ${selectedArea.name}`
-                    : "Velg sted på hovedfanen først"
-                }
-                value={addressQuery}
-                onChange={(event) => {
-                  setAddressQuery(event.target.value);
-                  setAddressError(null);
-                  setSelected(null);
-                  setRouteAnalysis(null);
-                  setSelectedRouteId(null);
-                }}
-                disabled={!selectedArea}
-              />
-
-              {addressLoading && (
-                <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>
-              )}
-
+              {addressLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
               {addressError && (
                 <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
               )}
-
               {addressResults.length > 0 && (
                 <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
                   {addressResults.map((place) => (
@@ -922,7 +901,7 @@ export default function HomePage() {
                       <button
                         type="button"
                         className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
-                        onClick={() => void loadWeatherForPlace(place)}
+                        onClick={() => setRouteEnd(place)}
                       >
                         {place.name}
                       </button>
@@ -930,68 +909,53 @@ export default function HomePage() {
                   ))}
                 </ul>
               )}
-
-              {!addressLoading &&
-                !addressError &&
-                selectedArea &&
-                addressQuery.trim().length >= 2 &&
-                addressResults.length === 0 && (
-                  <p className="mt-3 text-sm text-slate-400">
-                    Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
-                  </p>
-                )}
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-slate-800/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                <p className="mt-1 text-sm font-medium text-slate-100">
-                  {selected?.name || "Velg adresse først"}
-                </p>
-              </div>
-              <label className="rounded-lg bg-slate-800/60 p-3">
-                <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={minDistanceKm}
-                  onChange={(event) => setMinDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                />
-              </label>
-              <label className="rounded-lg bg-slate-800/60 p-3">
-                <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={maxDistanceKm}
-                  onChange={(event) => setMaxDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                />
-              </label>
             </div>
 
             <button
               type="button"
               onClick={() => void analyzeRoutes()}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
-              disabled={!selected || routeLoading || weatherLoading || addressLoading}
+              disabled={!routeStart || !routeEnd || routeLoading || weatherLoading || addressLoading}
             >
-              Analyser ruter
+              Finn beste tidspunkt for ruten
             </button>
           </div>
 
-          {selected && (
-            <RouteAnalysisPanel
-              data={routeAnalysis}
-              loading={routeLoading}
-              error={routeError}
-              selectedRouteId={selectedRouteId}
-              onSelectRoute={setSelectedRouteId}
-              onRefresh={() => void analyzeRoutes()}
-            />
+          {routeError && (
+            <div className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{routeError}</div>
+          )}
+          {routeAnalysis && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+                <p className="text-sm text-slate-300">
+                  Rute: <strong>{routeAnalysis.start.name}</strong> →{" "}
+                  <strong>{routeAnalysis.end.name}</strong>
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  Avstand ca. {routeAnalysis.distanceKm} km, kurs {routeAnalysis.headingDeg}°.
+                </p>
+              </div>
+              <BestWindowCard
+                bestWindow={
+                  analysisRunMs === null
+                    ? null
+                    : buildBestWindowFromHours(routeAnalysis.hours.slice(0, 24), analysisRunMs)
+                }
+                title="Beste tidspunkt neste 24 timer (din rute)"
+                emptyMessage="Ingen tilgjengelige timer i de neste 24 timene."
+                includeDay
+              />
+              <BestWindowCard
+                bestWindow={
+                  analysisRunMs === null
+                    ? null
+                    : buildBestWindowFromHours(routeAnalysis.hours, analysisRunMs)
+                }
+                title="Beste tidspunkt neste 7 dager (din rute)"
+                emptyMessage="Ingen tilgjengelige timer i de neste 7 dagene."
+                includeDay
+              />
+            </div>
           )}
         </section>
       )}
@@ -1002,8 +966,8 @@ export default function HomePage() {
           lon={selected.lon}
           label={selected.name}
           onMarkerMoved={onMarkerMoved}
-          routeName={selectedRoute?.shortName || null}
-          routePoints={selectedRoute?.points || []}
+          routeName={routeAnalysis ? `${routeAnalysis.start.name} til ${routeAnalysis.end.name}` : null}
+          routePoints={routeAnalysis?.routePoints || []}
         />
       )}
     </main>

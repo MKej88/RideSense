@@ -121,3 +121,17 @@ export interface RouteAnalysisResponse {
   bestRouteId: string | null;
   bestRouteExplanation: string | null;
 }
+
+export interface RouteWindHour extends ScoredWeatherHour {
+  tailwindComponent: number;
+}
+
+export interface RouteWindAnalysisResponse {
+  analyzedAt: string;
+  start: GeocodeResult;
+  end: GeocodeResult;
+  distanceKm: number;
+  headingDeg: number;
+  routePoints: RoutePoint[];
+  hours: RouteWindHour[];
+}
