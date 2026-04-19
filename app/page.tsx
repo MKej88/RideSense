@@ -96,16 +96,19 @@ function formatUpdatedAt(time: string): string {
 }
 
 function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
-  if (hours.length === 0) {
+  const now = Date.now();
+  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() > now);
+
+  if (futureHours.length === 0) {
     return null;
   }
 
-  const windowSize = Math.min(3, hours.length);
+  const windowSize = Math.min(3, futureHours.length);
   let bestStartIndex = 0;
   let bestAverage = -1;
 
-  for (let index = 0; index <= hours.length - windowSize; index += 1) {
-    const segment = hours.slice(index, index + windowSize);
+  for (let index = 0; index <= futureHours.length - windowSize; index += 1) {
+    const segment = futureHours.slice(index, index + windowSize);
     const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
 
     if (average > bestAverage) {
@@ -114,7 +117,7 @@ function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow |
     }
   }
 
-  const bestSegment = hours.slice(bestStartIndex, bestStartIndex + windowSize);
+  const bestSegment = futureHours.slice(bestStartIndex, bestStartIndex + windowSize);
 
   return {
     startTime: bestSegment[0].time,
