@@ -23,6 +23,9 @@ const LocationMap = dynamic(
 const RouteAnalysisPanel = dynamic(
   () => import("@/components/RouteAnalysisPanel").then((module) => module.RouteAnalysisPanel)
 );
+const ScoreModelInfo = dynamic(
+  () => import("@/components/ScoreModelInfo").then((module) => module.ScoreModelInfo)
+);
 const WeatherTable = dynamic(
   () => import("@/components/WeatherTable").then((module) => module.WeatherTable)
 );
@@ -830,6 +833,7 @@ export default function HomePage() {
               emptyMessage="Ingen gyldige timer for valgt dag."
             />
           )}
+          <ScoreModelInfo />
           <WeatherTable hours={displayedForecastHours} />
         </section>
       )}

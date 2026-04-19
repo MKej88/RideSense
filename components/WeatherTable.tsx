@@ -61,6 +61,51 @@ function formatWindDescription(windSpeed: number, direction?: number): string {
   return `Sterk vind fra ${directionText}`;
 }
 
+function formatSymbol(symbolCode?: string): string {
+  if (!symbolCode) {
+    return "-";
+  }
+
+  return symbolCode
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getSymbolEmoji(symbolCode?: string): string {
+  const symbol = (symbolCode || "").toLowerCase();
+
+  if (symbol.includes("thunder")) {
+    return "⛈️";
+  }
+
+  if (symbol.includes("snow")) {
+    return "❄️";
+  }
+
+  if (symbol.includes("rain") || symbol.includes("showers")) {
+    return "🌧️";
+  }
+
+  if (symbol.includes("fog")) {
+    return "🌫️";
+  }
+
+  if (symbol.includes("partlycloudy") || symbol.includes("fair")) {
+    return "⛅";
+  }
+
+  if (symbol.includes("cloudy")) {
+    return "☁️";
+  }
+
+  if (symbol.includes("clearsky")) {
+    return symbol.includes("night") ? "🌙" : "☀️";
+  }
+
+  return "🌤️";
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
@@ -70,6 +115,8 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             <th className="px-4 py-3">Tid</th>
             <th className="px-4 py-3">Temp</th>
             <th className="px-4 py-3">Nedbør</th>
+            <th className="px-4 py-3">Skydekke</th>
+            <th className="px-4 py-3">Symbol</th>
             <th className="px-4 py-3">Vind</th>
             <th className="px-4 py-3">Vindkast</th>
             <th className="px-4 py-3">Vindretning</th>
@@ -77,21 +124,37 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
           </tr>
         </thead>
         <tbody>
-          {hours.map((hour) => (
-            <tr key={hour.time} className="border-t border-slate-800">
-              <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
-              <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
-              <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
-              <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
-              <td className="px-4 py-3">
-                {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
-              </td>
-              <td className="px-4 py-3">{formatWindDescription(hour.windSpeed, hour.windFromDirection)}</td>
-              <td className="px-4 py-3">
-                <ScoreBadge label={hour.scoreLabel} score={hour.score} />
-              </td>
-            </tr>
-          ))}
+          {hours.map((hour) => {
+            const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+
+            return (
+              <tr key={hour.time} className="border-t border-slate-800">
+                <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
+                <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
+                <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
+                <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
+                <td className="px-4 py-3">
+                  <div
+                    className="flex items-center justify-center text-2xl"
+                    title={formatSymbol(hour.symbolCode)}
+                    aria-label={formatSymbol(hour.symbolCode)}
+                  >
+                    {symbolEmoji}
+                  </div>
+                </td>
+                <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
+                <td className="px-4 py-3">
+                  {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
+                </td>
+                <td className="px-4 py-3">
+                  {formatWindDescription(hour.windSpeed, hour.windFromDirection)}
+                </td>
+                <td className="px-4 py-3">
+                  <ScoreBadge label={hour.scoreLabel} score={hour.score} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
