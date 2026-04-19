@@ -63,9 +63,9 @@ function formatWindDescription(windSpeed: number, direction?: number): string {
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-100 text-left text-slate-700">
+        <thead className="bg-slate-800 text-left text-slate-300">
           <tr>
             <th className="px-4 py-3">Tid</th>
             <th className="px-4 py-3">Temp</th>
@@ -78,8 +78,8 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
         </thead>
         <tbody>
           {hours.map((hour) => (
-            <tr key={hour.time} className="border-t border-slate-100">
-              <td className="px-4 py-3 font-medium text-slate-800">{formatHour(hour.time)}</td>
+            <tr key={hour.time} className="border-t border-slate-800">
+              <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
               <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
               <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
               <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>

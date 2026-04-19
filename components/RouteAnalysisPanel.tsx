@@ -29,11 +29,11 @@ export function RouteAnalysisPanel({
     data?.routes.find((route) => route.route.id === selectedRouteId) ?? data?.routes[0] ?? null;
 
   return (
-    <section className="rounded-xl bg-white p-6 shadow-sm">
+    <section className="rounded-xl bg-slate-900 p-6 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Ruteanalyse</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          <h2 className="text-xl font-semibold text-slate-100">Ruteanalyse</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-400">
             Startplass er {data?.locationLabel || "valgt sted"}. Vi bygger 2-3 tur/retur-ruter
             innenfor {data?.minDistanceKm ?? "valgt"}-{data?.maxDistanceKm ?? "valgt"} km,
             sampler fem punkter langs hver og beregner en samlet rutescore.
@@ -42,7 +42,7 @@ export function RouteAnalysisPanel({
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+          className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
           disabled={loading}
         >
           Oppdater analyse
@@ -50,21 +50,21 @@ export function RouteAnalysisPanel({
       </div>
 
       {loading && (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-sm text-slate-400">
           Analyserer ruter og henter værdata for prøvepunktene …
         </div>
       )}
 
       {error && (
-        <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="mt-4 rounded-xl bg-rose-950/40 p-4 text-sm text-rose-300">{error}</div>
       )}
 
       {data && !loading && !error && (
         <div className="mt-5 space-y-5">
           {data.bestRouteExplanation && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-medium text-emerald-900">Beste rute akkurat nå</p>
-              <p className="mt-1 text-base text-emerald-950">{data.bestRouteExplanation}</p>
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-4">
+              <p className="text-sm font-medium text-emerald-200">Beste rute akkurat nå</p>
+              <p className="mt-1 text-base text-emerald-100">{data.bestRouteExplanation}</p>
             </div>
           )}
 
@@ -80,7 +80,7 @@ export function RouteAnalysisPanel({
                   className={`rounded-xl border p-4 text-left transition ${
                     selected
                       ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-slate-50 hover:border-slate-400"
+                      : "border-slate-700 bg-slate-800/60 hover:border-slate-400"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -90,7 +90,7 @@ export function RouteAnalysisPanel({
                       score={routeAnalysis.summary.score}
                     />
                   </div>
-                  <p className={`mt-3 text-sm ${selected ? "text-slate-200" : "text-slate-600"}`}>
+                  <p className={`mt-3 text-sm ${selected ? "text-slate-200" : "text-slate-400"}`}>
                     {routeAnalysis.route.description}
                   </p>
                   <p className={`mt-3 text-sm ${selected ? "text-slate-300" : "text-slate-500"}`}>
@@ -103,11 +103,11 @@ export function RouteAnalysisPanel({
 
           {selectedRoute && (
             <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-              <div className="rounded-xl border border-slate-200 p-4">
+              <div className="rounded-xl border border-slate-700 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900">{selectedRoute.route.shortName}</h3>
-                    <p className="mt-2 text-sm text-slate-600">{selectedRoute.summary.explanation}</p>
+                    <h3 className="text-xl font-semibold text-slate-100">{selectedRoute.route.shortName}</h3>
+                    <p className="mt-2 text-sm text-slate-400">{selectedRoute.summary.explanation}</p>
                   </div>
                   <ScoreBadge
                     label={selectedRoute.summary.scoreLabel}
@@ -116,51 +116,51 @@ export function RouteAnalysisPanel({
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.route.startLabel}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Sluttplass</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.route.endLabel}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Lengde</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.route.distanceKm} km
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">En vei</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.route.oneWayDistanceKm} km
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Snitt vind</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.summary.averageWindSpeed} m/s
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="rounded-lg bg-slate-800/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Snitt nedbør</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                    <p className="mt-1 text-lg font-semibold text-slate-100">
                       {selectedRoute.summary.averagePrecipitation} mm
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-4">
-                <h3 className="text-base font-semibold text-slate-900">Samplede punkter</h3>
-                <p className="mt-1 text-sm text-slate-600">
+              <div className="rounded-xl border border-slate-700 p-4">
+                <h3 className="text-base font-semibold text-slate-100">Samplede punkter</h3>
+                <p className="mt-1 text-sm text-slate-400">
                   Hvert punkt bruker nærmeste tilgjengelige værtime fra MET.
                 </p>
 
@@ -177,15 +177,15 @@ export function RouteAnalysisPanel({
                     </thead>
                     <tbody>
                       {selectedRoute.sampledPoints.map((point) => (
-                        <tr key={`${selectedRoute.route.id}-${point.sample.index}`} className="border-t border-slate-100">
-                          <td className="py-3 pr-4 font-medium text-slate-800">
+                        <tr key={`${selectedRoute.route.id}-${point.sample.index}`} className="border-t border-slate-800">
+                          <td className="py-3 pr-4 font-medium text-slate-200">
                             {point.sample.label}
                           </td>
-                          <td className="py-3 pr-4 text-slate-600">{formatTime(point.weather.time)}</td>
-                          <td className="py-3 pr-4 text-slate-600">
+                          <td className="py-3 pr-4 text-slate-400">{formatTime(point.weather.time)}</td>
+                          <td className="py-3 pr-4 text-slate-400">
                             {point.weather.windSpeed.toFixed(1)} m/s
                           </td>
-                          <td className="py-3 pr-4 text-slate-600">
+                          <td className="py-3 pr-4 text-slate-400">
                             {point.weather.precipitationAmount.toFixed(1)} mm
                           </td>
                           <td className="py-3">

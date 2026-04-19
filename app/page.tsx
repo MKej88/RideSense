@@ -15,7 +15,7 @@ const LocationMap = dynamic(
   () => import("@/components/LocationMap").then((module) => module.LocationMap),
   {
     loading: () => (
-      <section className="rounded-xl bg-white p-4 text-slate-600 shadow-sm">Laster kart …</section>
+      <section className="rounded-xl bg-slate-900 p-4 text-slate-400 shadow-sm">Laster kart …</section>
     ),
     ssr: false
   }
@@ -29,6 +29,23 @@ const WeatherTable = dynamic(
 
 const PLACE_SEARCH_DEBOUNCE_MS = 180;
 const ADDRESS_SEARCH_DEBOUNCE_MS = 180;
+const QUICK_CITIES: GeocodeResult[] = [
+  { name: "Oslo", lat: 59.9139, lon: 10.7522 },
+  { name: "Bærum", lat: 59.8939, lon: 10.523 },
+  { name: "Drammen", lat: 59.7439, lon: 10.2045 },
+  { name: "Kristiansand", lat: 58.1467, lon: 7.9956 },
+  { name: "Arendal", lat: 58.4615, lon: 8.7725 },
+  { name: "Grimstad", lat: 58.3405, lon: 8.5934 },
+  { name: "Bergen", lat: 60.39299, lon: 5.32415 },
+  { name: "Stavanger", lat: 58.97, lon: 5.7331 },
+  { name: "Sandnes", lat: 58.8518, lon: 5.7362 },
+  { name: "Trondheim", lat: 63.4305, lon: 10.3951 },
+  { name: "Stjørdal", lat: 63.468, lon: 10.927 },
+  { name: "Steinkjer", lat: 64.015, lon: 11.4954 },
+  { name: "Tromsø", lat: 69.6492, lon: 18.9553 },
+  { name: "Bodø", lat: 67.2804, lon: 14.4049 },
+  { name: "Harstad", lat: 68.7985, lon: 16.5418 }
+];
 
 function getAreaContextLabel(place: GeocodeResult): string {
   const primaryName = place.name.split(",")[0]?.trim();
@@ -53,17 +70,45 @@ function getOsloDayKey(time: string): string {
   });
 }
 
+function getOsloHour(time: string): number {
+  return Number(
+    new Date(time).toLocaleTimeString("nb-NO", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Oslo"
+    })
+  );
+}
+
+function isCyclingHour(time: string): boolean {
+  return getOsloHour(time) >= 6;
+}
+
+function formatUpdatedAt(time: string): string {
+  return new Date(time).toLocaleString("nb-NO", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Oslo"
+  });
+}
+
 function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
-  if (hours.length === 0) {
+  const now = Date.now();
+  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() > now);
+
+  if (futureHours.length === 0) {
     return null;
   }
 
-  const windowSize = Math.min(3, hours.length);
+  const windowSize = Math.min(3, futureHours.length);
   let bestStartIndex = 0;
   let bestAverage = -1;
 
-  for (let index = 0; index <= hours.length - windowSize; index += 1) {
-    const segment = hours.slice(index, index + windowSize);
+  for (let index = 0; index <= futureHours.length - windowSize; index += 1) {
+    const segment = futureHours.slice(index, index + windowSize);
     const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
 
     if (average > bestAverage) {
@@ -72,7 +117,7 @@ function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow |
     }
   }
 
-  const bestSegment = hours.slice(bestStartIndex, bestStartIndex + windowSize);
+  const bestSegment = futureHours.slice(bestStartIndex, bestStartIndex + windowSize);
 
   return {
     startTime: bestSegment[0].time,
@@ -374,7 +419,9 @@ export default function HomePage() {
       const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
       const allowedDays = new Set(dayKeys.slice(0, 7));
 
-      return futureHours.filter((hour) => allowedDays.has(getOsloDayKey(hour.time)));
+      return futureHours.filter(
+        (hour) => allowedDays.has(getOsloDayKey(hour.time)) && isCyclingHour(hour.time)
+      );
     }
 
     const now = Date.now();
@@ -382,17 +429,7 @@ export default function HomePage() {
       .filter((hour) => new Date(hour.time).getTime() >= now)
       .slice(0, 24);
 
-    return nextDayHours.filter((hour) => {
-      const localHour = Number(
-        new Date(hour.time).toLocaleTimeString("nb-NO", {
-          hour: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Oslo"
-        })
-      );
-
-      return localHour >= 6;
-    });
+    return nextDayHours.filter((hour) => isCyclingHour(hour.time));
   }, [forecastRange, weather]);
 
   const forecastDays = useMemo(() => {
@@ -413,7 +450,8 @@ export default function HomePage() {
         month: "2-digit",
         timeZone: "Europe/Oslo"
       }),
-      hours
+      hours,
+      bestWindow: buildBestWindowFromHours(hours)
     }));
   }, [visibleWeatherHours]);
 
@@ -441,6 +479,11 @@ export default function HomePage() {
     return selectedDay?.hours || [];
   }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
 
+  const selectedForecastDayData = useMemo(
+    () => forecastDays.find((day) => day.dayKey === selectedForecastDay) || null,
+    [forecastDays, selectedForecastDay]
+  );
+
   const visibleBestWindow24h = useMemo(() => {
     if (forecastRange !== "24h") {
       return null;
@@ -448,6 +491,22 @@ export default function HomePage() {
 
     return buildBestWindowFromHours(visibleWeatherHours);
   }, [forecastRange, visibleWeatherHours]);
+
+  const visibleBestWindow7d = useMemo(() => {
+    if (forecastRange !== "7d") {
+      return null;
+    }
+
+    return buildBestWindowFromHours(visibleWeatherHours);
+  }, [forecastRange, visibleWeatherHours]);
+
+  const updatedWeatherAt = useMemo(() => {
+    if (!weather) {
+      return null;
+    }
+
+    return weather.observationSummary.observedAt || weather.hours[0]?.time || null;
+  }, [weather]);
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -462,76 +521,119 @@ export default function HomePage() {
     [loadWeatherForPlace]
   );
 
-  function useMyLocation(): void {
-    setError(null);
-
-    if (!("geolocation" in navigator)) {
-      setError("Nettleseren støtter ikke posisjonstjenester.");
-      return;
-    }
-
-      setWeatherLoading(true);
-      navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const currentPlace: GeocodeResult = {
-          name: "Min posisjon",
-          lat: position.coords.latitude,
-          lon: position.coords.longitude
-        };
-        setSelectedArea(currentPlace);
-        await loadWeatherForPlace(currentPlace);
-      },
-      () => {
-        setError("Fikk ikke tilgang til posisjon. Sjekk nettleserinnstillinger.");
-        setWeatherLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  }
-
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
-        <h1 className="text-3xl font-bold">RideSense</h1>
-        <p className="mt-2 text-sm text-sky-50">
-          Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
-        </p>
+      <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(45,212,191,0.28),rgba(2,11,35,0)_38%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_85%,rgba(14,165,233,0.22),rgba(2,11,35,0)_45%)]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#020b23]/95 via-[#031533]/78 to-[#021021]/58" />
+          <svg viewBox="0 0 1000 320" className="absolute inset-x-0 bottom-0 h-[72%] w-full opacity-90" aria-hidden="true">
+            <defs>
+              <linearGradient id="heroPathGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0" />
+                <stop offset="48%" stopColor="#22d3ee" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.28" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M-40 250 C140 225, 220 150, 360 176 S610 260, 1030 72"
+              fill="none"
+              stroke="url(#heroPathGlow)"
+              strokeWidth="6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M-80 275 C140 244, 300 298, 500 262 S810 190, 1060 162"
+              fill="none"
+              stroke="rgba(34,211,238,0.28)"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
 
-        <div className="mt-5 inline-flex rounded-xl bg-white/20 p-1">
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              activeTab === "forecast"
-                ? "bg-white text-slate-900"
-                : "text-white hover:bg-white/20"
-            }`}
-            onClick={() => setActiveTab("forecast")}
-          >
-            Vær og tidspunkt
-          </button>
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-              activeTab === "routes"
-                ? "bg-white text-slate-900"
-                : "text-white hover:bg-white/20"
-            }`}
-            onClick={() => setActiveTab("routes")}
-          >
-            Ruteanalyse
-          </button>
+        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/55 px-3 py-1 text-xs font-medium text-cyan-100 backdrop-blur-md">
+              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
+              Smart sykkelprognose
+            </div>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">RideSense</h1>
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-100/95 md:text-xl">
+              Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
+            </p>
+
+            <div className="mt-6 inline-flex rounded-2xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur-md">
+              <button
+                type="button"
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  activeTab === "forecast"
+                    ? "bg-[#061739] text-cyan-100 ring-1 ring-cyan-300/45 shadow-[0_6px_18px_-10px_rgba(34,211,238,0.8)]"
+                    : "text-slate-200 hover:bg-cyan-400/10"
+                }`}
+                onClick={() => setActiveTab("forecast")}
+              >
+                Vær og tidspunkt
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  activeTab === "routes"
+                    ? "bg-gradient-to-r from-cyan-500/95 to-teal-400/90 text-slate-950 shadow-[0_8px_22px_-12px_rgba(45,212,191,0.8)]"
+                    : "text-slate-200 hover:bg-cyan-400/10"
+                }`}
+                onClick={() => setActiveTab("routes")}
+              >
+                Ruteanalyse
+              </button>
+            </div>
+          </div>
+
+          <div className="relative hidden min-h-[240px] items-center justify-center lg:flex">
+            <div className="absolute right-4 top-4 rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
+                <path
+                  d="M18 34a10 10 0 1 1 4-19 12 12 0 0 1 22 8h1a8 8 0 1 1 0 16H18z"
+                  fill="none"
+                  stroke="#67e8f9"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="42" cy="13" r="3" fill="#5eead4" />
+              </svg>
+            </div>
+            <div className="absolute right-16 top-[96px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 68 44" className="h-10 w-14" aria-hidden="true">
+                <circle cx="14" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <circle cx="50" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <path
+                  d="M14 30l14-14h12l14 14M28 16l-7-6h-9"
+                  fill="none"
+                  stroke="#2dd4bf"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <div className="absolute right-0 top-[126px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
+                <circle cx="28" cy="28" r="20" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <path d="M28 28V15M28 28l10 6" stroke="#99f6e4" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">1) Velg sted</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Søk etter område først, deretter startadresse. Så får du resultat direkte.
-        </p>
+      <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
+        <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
           <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
             placeholder="Søk sted i Norge"
             value={query}
             onChange={(event) => {
@@ -553,30 +655,41 @@ export default function HomePage() {
           />
           <button
             type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-600 disabled:opacity-60"
             disabled={weatherLoading || addressLoading || placeLoading || query.trim().length < 2}
           >
             Søk
           </button>
-          <button
-            type="button"
-            onClick={useMyLocation}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-100 disabled:opacity-60"
-            disabled={weatherLoading || addressLoading || placeLoading}
-          >
-            Bruk min posisjon
-          </button>
         </form>
+        <div className="mt-4">
+          <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
+          <div className="grid grid-cols-5 gap-2">
+            {QUICK_CITIES.map((city) => (
+              <button
+                key={`${city.name}-${city.lat}-${city.lon}`}
+                type="button"
+                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+                onClick={() => {
+                  chooseArea(city);
+                  void loadWeatherForPlace(city);
+                }}
+                disabled={weatherLoading || addressLoading || placeLoading}
+              >
+                {city.name}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {placeLoading && <p className="mt-3 text-sm text-slate-600">Søker steder …</p>}
+        {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
 
         {results.length > 0 && (
-          <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
             {results.map((place) => (
               <li key={`${place.name}-${place.lat}-${place.lon}`}>
                 <button
                   type="button"
-                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-200"
+                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
                   onClick={() => {
                     chooseArea(place);
                     void loadWeatherForPlace(place);
@@ -590,37 +703,37 @@ export default function HomePage() {
         )}
 
         {!placeLoading && query.trim().length >= 2 && results.length === 0 && !selectedArea && !error && (
-          <p className="mt-3 text-sm text-slate-600">
+          <p className="mt-3 text-sm text-slate-400">
             Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
           </p>
         )}
 
-        {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
 
       </section>
 
       {!weather && !weatherLoading && !error && (
-        <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-600">
+        <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
           Velg et sted for å se værtime-for-time, sykkelscore og dagens beste tidsvindu.
         </section>
       )}
 
       {weatherLoading && (
-        <section className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Laster data …</section>
+        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
       )}
 
       {weather && activeTab === "forecast" && (
         <section className="space-y-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
-            <div className="mt-3 inline-flex rounded-lg bg-slate-100 p-1">
+            <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
                 type="button"
                 onClick={() => setForecastRange("24h")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "24h"
-                    ? "bg-white font-medium text-slate-900 shadow-sm"
-                    : "text-slate-700"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    : "text-slate-300"
                 }`}
               >
                 Neste 24 timer
@@ -630,70 +743,92 @@ export default function HomePage() {
                 onClick={() => setForecastRange("7d")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "7d"
-                    ? "bg-white font-medium text-slate-900 shadow-sm"
-                    : "text-slate-700"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    : "text-slate-300"
                 }`}
               >
                 Neste 7 dager
               </button>
             </div>
 
-            <div className="mt-4">
-              <BestWindowCard
-                bestWindow={forecastRange === "24h" ? visibleBestWindow24h : weather.bestWindowNext7Days}
-                title={
-                  forecastRange === "24h"
-                    ? "Beste tidspunkt i dag"
-                    : "Beste tidspunkt neste 7 dager"
-                }
-                emptyMessage={
-                  forecastRange === "24h"
-                    ? "Ingen timer igjen i dag å evaluere."
-                    : "Fant ikke tilgjengelige timer i de neste 7 dagene."
-                }
-                includeDay={forecastRange === "7d"}
-              />
-            </div>
+            {forecastRange === "24h" && (
+              <div className="mt-4">
+                <BestWindowCard
+                  bestWindow={visibleBestWindow24h}
+                  title="Beste tidspunkt i dag"
+                  emptyMessage="Ingen timer igjen i dag å evaluere."
+                />
+              </div>
+            )}
+            {forecastRange === "7d" && (
+              <div className="mt-4">
+                <BestWindowCard
+                  bestWindow={visibleBestWindow7d}
+                  title="Beste tidspunkt neste 7 dager"
+                  emptyMessage="Fant ikke tilgjengelige timer i de neste 7 dagene."
+                  includeDay
+                />
+              </div>
+            )}
 
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-slate-400">
               {forecastRange === "24h"
                 ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
                 : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
             </p>
-            <p className="mt-2 text-sm text-slate-700">
-              Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
-                ? "prognose + observasjon"
-                : "kun prognose"}
-            </p>
-            <p className="text-xs text-slate-500">
-              {weather.observationSummary.used
-                ? `Observasjon fra ${weather.observationSummary.sourceName} (${weather.observationSummary.stationName || "ukjent stasjon"}).`
-                : weather.observationSummary.stationName &&
-                    weather.observationSummary.observedAt
-                  ? `Fant observasjon fra ${weather.observationSummary.stationName}, men den er for gammel for timescoren. Appen bruker derfor kun prognose akkurat nå.`
-                  : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {updatedWeatherAt && (
+                <p className="text-sm text-slate-300">
+                  Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const placeToRefresh = selected || selectedArea;
+                  if (!placeToRefresh) {
+                    return;
+                  }
+                  void loadWeatherForPlace(placeToRefresh);
+                }}
+                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                disabled={weatherLoading || (!selected && !selectedArea)}
+              >
+                Oppdater værdata
+              </button>
+            </div>
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-sm">
               <div className="flex min-w-max gap-2">
                 {forecastDays.map((day) => (
                   <button
                     key={day.dayKey}
                     type="button"
                     onClick={() => setSelectedForecastDay(day.dayKey)}
-                    className={`rounded-lg px-3 py-2 text-sm ${
+                    className={`rounded-lg px-3 py-2 text-left text-sm ${
                       day.dayKey === selectedForecastDay
                         ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-600"
                     }`}
                   >
-                    {day.label}
+                    <span className="block">{day.label}</span>
                   </button>
                 ))}
               </div>
             </div>
+          )}
+          {forecastRange === "7d" && (
+            <BestWindowCard
+              bestWindow={selectedForecastDayData?.bestWindow || null}
+              title={
+                selectedForecastDay
+                  ? `Beste tidspunkt ${selectedForecastDayData?.label || "for valgt dag"}`
+                  : "Beste tidspunkt for valgt dag"
+              }
+              emptyMessage="Ingen gyldige timer for valgt dag."
+            />
           )}
           <WeatherTable hours={displayedForecastHours} />
         </section>
@@ -701,20 +836,20 @@ export default function HomePage() {
 
       {activeTab === "routes" && (
         <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Ruteanalyse</h2>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
+            <p className="mt-1 text-sm text-slate-400">
               Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
             </p>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-base font-semibold text-slate-900">Startadresse (kun ruteanalyse)</h3>
-              <p className="mt-1 text-sm text-slate-600">
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <h3 className="text-base font-semibold text-slate-100">Startadresse (kun ruteanalyse)</h3>
+              <p className="mt-1 text-sm text-slate-400">
                 Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
               </p>
 
               <input
-                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+                className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 placeholder={
                   selectedArea
                     ? `Søk adresse i ${selectedArea.name}`
@@ -732,20 +867,20 @@ export default function HomePage() {
               />
 
               {addressLoading && (
-                <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
+                <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>
               )}
 
               {addressError && (
-                <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
+                <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
               )}
 
               {addressResults.length > 0 && (
-                <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
                   {addressResults.map((place) => (
                     <li key={`${place.name}-${place.lat}-${place.lon}`}>
                       <button
                         type="button"
-                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
                         onClick={() => void loadWeatherForPlace(place)}
                       >
                         {place.name}
@@ -760,20 +895,20 @@ export default function HomePage() {
                 selectedArea &&
                 addressQuery.trim().length >= 2 &&
                 addressResults.length === 0 && (
-                  <p className="mt-3 text-sm text-slate-600">
+                  <p className="mt-3 text-sm text-slate-400">
                     Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
                   </p>
                 )}
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-slate-50 p-3">
+              <div className="rounded-lg bg-slate-800/60 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                <p className="mt-1 text-sm font-medium text-slate-900">
+                <p className="mt-1 text-sm font-medium text-slate-100">
                   {selected?.name || "Velg adresse først"}
                 </p>
               </div>
-              <label className="rounded-lg bg-slate-50 p-3">
+              <label className="rounded-lg bg-slate-800/60 p-3">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
                 <input
                   type="number"
@@ -781,10 +916,10 @@ export default function HomePage() {
                   step="1"
                   value={minDistanceKm}
                   onChange={(event) => setMinDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 />
               </label>
-              <label className="rounded-lg bg-slate-50 p-3">
+              <label className="rounded-lg bg-slate-800/60 p-3">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
                 <input
                   type="number"
@@ -792,7 +927,7 @@ export default function HomePage() {
                   step="1"
                   value={maxDistanceKm}
                   onChange={(event) => setMaxDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 />
               </label>
             </div>
@@ -800,7 +935,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => void analyzeRoutes()}
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
+              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
               disabled={!selected || routeLoading || weatherLoading || addressLoading}
             >
               Analyser ruter

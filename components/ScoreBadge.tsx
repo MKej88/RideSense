@@ -1,9 +1,9 @@
 import { ScoredWeatherHour } from "@/lib/types";
 
 const STYLE_MAP: Record<ScoredWeatherHour["scoreLabel"], string> = {
-  good: "bg-green-100 text-green-800",
-  ok: "bg-amber-100 text-amber-800",
-  bad: "bg-red-100 text-red-800"
+  good: "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40",
+  ok: "bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/40",
+  bad: "bg-rose-500/20 text-rose-300 ring-1 ring-rose-400/40"
 };
 
 export function ScoreBadge({ label, score }: { label: ScoredWeatherHour["scoreLabel"]; score: number }) {
