@@ -53,6 +53,48 @@ function getOsloDayKey(time: string): string {
   });
 }
 
+function getOsloHour(time: string): number {
+  return Number(
+    new Date(time).toLocaleTimeString("nb-NO", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Oslo"
+    })
+  );
+}
+
+function isCyclingHour(time: string): boolean {
+  return getOsloHour(time) >= 6;
+}
+
+function formatTimeRange(startTime: string, endTime: string): string {
+  const start = new Date(startTime).toLocaleTimeString("nb-NO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Oslo"
+  });
+  const end = new Date(endTime).toLocaleTimeString("nb-NO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Oslo"
+  });
+
+  return `${start}–${end}`;
+}
+
+function formatUpdatedAt(time: string): string {
+  return new Date(time).toLocaleString("nb-NO", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Europe/Oslo"
+  });
+}
+
 function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
   if (hours.length === 0) {
     return null;
@@ -374,7 +416,9 @@ export default function HomePage() {
       const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
       const allowedDays = new Set(dayKeys.slice(0, 7));
 
-      return futureHours.filter((hour) => allowedDays.has(getOsloDayKey(hour.time)));
+      return futureHours.filter(
+        (hour) => allowedDays.has(getOsloDayKey(hour.time)) && isCyclingHour(hour.time)
+      );
     }
 
     const now = Date.now();
@@ -382,17 +426,7 @@ export default function HomePage() {
       .filter((hour) => new Date(hour.time).getTime() >= now)
       .slice(0, 24);
 
-    return nextDayHours.filter((hour) => {
-      const localHour = Number(
-        new Date(hour.time).toLocaleTimeString("nb-NO", {
-          hour: "2-digit",
-          hour12: false,
-          timeZone: "Europe/Oslo"
-        })
-      );
-
-      return localHour >= 6;
-    });
+    return nextDayHours.filter((hour) => isCyclingHour(hour.time));
   }, [forecastRange, weather]);
 
   const forecastDays = useMemo(() => {
@@ -413,7 +447,8 @@ export default function HomePage() {
         month: "2-digit",
         timeZone: "Europe/Oslo"
       }),
-      hours
+      hours,
+      bestWindow: buildBestWindowFromHours(hours)
     }));
   }, [visibleWeatherHours]);
 
@@ -448,6 +483,14 @@ export default function HomePage() {
 
     return buildBestWindowFromHours(visibleWeatherHours);
   }, [forecastRange, visibleWeatherHours]);
+
+  const updatedWeatherAt = useMemo(() => {
+    if (!weather) {
+      return null;
+    }
+
+    return weather.observationSummary.observedAt || weather.hours[0]?.time || null;
+  }, [weather]);
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -524,14 +567,14 @@ export default function HomePage() {
       </section>
 
       <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
-        <h2 className="text-lg font-semibold text-slate-100">1) Velg sted</h2>
+        <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
         <p className="mt-1 text-sm text-slate-400">
           Søk etter område først, deretter startadresse. Så får du resultat direkte.
         </p>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
           <input
-            className="w-full rounded-lg border border-slate-600 px-3 py-2 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
             placeholder="Søk sted i Norge"
             value={query}
             onChange={(event) => {
@@ -660,19 +703,11 @@ export default function HomePage() {
                 ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
                 : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
             </p>
-            <p className="mt-2 text-sm text-slate-300">
-              Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
-                ? "prognose + observasjon"
-                : "kun prognose"}
-            </p>
-            <p className="text-xs text-slate-500">
-              {weather.observationSummary.used
-                ? `Observasjon fra ${weather.observationSummary.sourceName} (${weather.observationSummary.stationName || "ukjent stasjon"}).`
-                : weather.observationSummary.stationName &&
-                    weather.observationSummary.observedAt
-                  ? `Fant observasjon fra ${weather.observationSummary.stationName}, men den er for gammel for timescoren. Appen bruker derfor kun prognose akkurat nå.`
-                  : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
-            </p>
+            {updatedWeatherAt && (
+              <p className="mt-2 text-sm text-slate-300">
+                Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
+              </p>
+            )}
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
@@ -683,13 +718,18 @@ export default function HomePage() {
                     key={day.dayKey}
                     type="button"
                     onClick={() => setSelectedForecastDay(day.dayKey)}
-                    className={`rounded-lg px-3 py-2 text-sm ${
+                    className={`rounded-lg px-3 py-2 text-left text-sm ${
                       day.dayKey === selectedForecastDay
                         ? "bg-slate-900 text-white"
                         : "bg-slate-800 text-slate-300 hover:bg-slate-600"
                     }`}
                   >
-                    {day.label}
+                    <span className="block">{day.label}</span>
+                    <span className={`mt-1 block text-xs ${day.dayKey === selectedForecastDay ? "text-slate-200" : "text-slate-400"}`}>
+                      {day.bestWindow
+                        ? `Best: ${formatTimeRange(day.bestWindow.startTime, day.bestWindow.endTime)}`
+                        : "Ingen gyldige timer"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -714,7 +754,7 @@ export default function HomePage() {
               </p>
 
               <input
-                className="mt-3 w-full rounded-lg border border-slate-600 px-3 py-2 focus:border-slate-500 focus:outline-none"
+                className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 placeholder={
                   selectedArea
                     ? `Søk adresse i ${selectedArea.name}`
@@ -781,7 +821,7 @@ export default function HomePage() {
                   step="1"
                   value={minDistanceKm}
                   onChange={(event) => setMinDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 />
               </label>
               <label className="rounded-lg bg-slate-800/60 p-3">
@@ -792,7 +832,7 @@ export default function HomePage() {
                   step="1"
                   value={maxDistanceKm}
                   onChange={(event) => setMaxDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                 />
               </label>
             </div>
