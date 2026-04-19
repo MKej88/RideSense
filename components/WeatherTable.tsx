@@ -74,11 +74,8 @@ function formatSymbol(symbolCode?: string): string {
 }
 
 function getSymbolIconUrl(symbolCode?: string): string | null {
-  if (!symbolCode) {
-    return null;
-  }
-
-  return `https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg/${symbolCode}.svg`;
+  const symbol = symbolCode || "unknown";
+  return `/api/weather-symbol?code=${encodeURIComponent(symbol)}`;
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
@@ -110,7 +107,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                 <td className="px-4 py-3">
                   {symbolIconUrl ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center">
                       <Image
                         src={symbolIconUrl}
                         alt={formatSymbol(hour.symbolCode)}
@@ -118,7 +115,6 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                         height={28}
                         className="h-7 w-7"
                       />
-                      <span>{formatSymbol(hour.symbolCode)}</span>
                     </div>
                   ) : (
                     "-"
