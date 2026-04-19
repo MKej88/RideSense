@@ -1,208 +1,165 @@
-# RideSense MVP
+# RideSense
 
-RideSense er en produksjonsklar MVP bygget med Next.js som hjelper landeveissyklister i Norge med å finne gode sykkeltidspunkt de neste 24 timene.
+RideSense er en webapp som hjelper syklister med å finne gode tidspunkt og ruter basert på vær.
+Appen bruker værprognoser fra MET, kan supplere med lokale stasjonsmålinger, og gir en enkel sykkelscore fra 0 til 100.
 
-## Funksjoner
+## Hva appen gjør nå
 
-- Søk etter sted i Norge.
-- Knapp for `Bruk min posisjon`.
-- Viser værtime-for-time for neste 24 timer:
-  - temperatur
-  - nedbør
-  - vindhastighet
-  - vindkast (hvis tilgjengelig)
-  - vindretning (hvis tilgjengelig)
-- Beregner sykkelscore (0–100) per time.
-- Fargekoder score:
-  - grønn = gode forhold
-  - gul = greie forhold
-  - rød = dårlige forhold
-- Finner og viser `Beste tidspunkt i dag`.
-- Viser om vurderingen bygger på `kun prognose` eller `prognose + observasjon`.
-- Beregner en enkel indikator for datatillit per time.
-- Kort forklaring på hvorfor tidsvinduet er best.
-- Feilhåndtering, tomtilstand og enkel responsiv UI.
-- Interaktivt kart med OpenStreetMap-kartlag og flyttbar markør.
-- Automatisk oppdatering av vær og sykkelscore når markøren flyttes.
-- Enkel ruteanalyse for 1-3 generiske ruter rundt valgt startadresse.
-- Sampling av fem punkter langs hver rute med egen værhenting per punkt.
-- Samlet rutescore og forklaring på hvilken rute som er best akkurat nå.
-- Valgt rute vises tydelig på kartet.
-- Ruter bygges fra faktiske OSM-veier og prioriterer asfaltregistrert dekke.
-- Brukeren velger først sted, deretter startadresse i stedet, før analyse kjøres.
-- Brukeren velger min og maks km før analyse, og distansen regnes som tur/retur.
+### 1) Stedssøk og adressevalg
 
-## Teknologi
+- Du kan søke etter område/sted i Norge.
+- Deretter kan du søke etter konkret startadresse i valgt område.
+- Appen bruker flere kilder for å finne relevante treff.
+
+### 2) Vær og sykkelscore
+
+For valgt startpunkt henter appen timesdata for inntil 7 døgn og viser:
+
+- temperatur
+- nedbør
+- vind
+- skydekke
+- værsymbol
+
+Hver time får en **sykkelscore (0–100)**:
+
+- **75–100**: gode forhold
+- **50–74**: ok forhold
+- **0–49**: dårlige forhold
+
+Scoren bygger på:
+
+- nedbør (trekker ned)
+- vind (trekker ned)
+- temperatur (best rundt 18–22 °C)
+- skydekke (litt pluss når det er mindre skyer)
+
+### 3) Beste sykkelvindu
+
+Appen regner ut:
+
+- beste vindu i dag
+- beste vindu for neste 7 dager
+
+I tillegg finnes en lokal visning i grensesnittet som finner beste synlige segment i tabellen.
+
+### 4) Datagrunnlag og tillit
+
+RideSense skiller mellom:
+
+- **kun prognose**
+- **prognose + observasjon**
+
+Hvis observasjon fra nærliggende stasjon finnes, vurderes avvik mellom observasjon og prognose.
+Det påvirker både score og en enkel tillitsindikator (high/medium/low).
+
+### 5) Kart og interaksjon
+
+- Kart vises med OpenStreetMap.
+- Markøren kan flyttes.
+- Når markøren flyttes, oppdateres værdata og score automatisk for ny posisjon.
+
+### 6) Ruteanalyse (1–3 ruter)
+
+Du kan analysere ruter fra valgt startpunkt ved å sette **min km** og **maks km**:
+
+- appen bygger opptil 3 tur/retur-ruter innen valgt avstand
+- ruter bygges fra veidata (Overpass/OSRM)
+- hver rute samples i flere punkter
+- vær hentes for punktene
+- hver rute får samlet rutescore
+- appen peker ut beste rute nå og forklarer kort hvorfor
+
+## Teknisk oversikt
 
 - Next.js (App Router)
-- TypeScript
+- React + TypeScript
 - Tailwind CSS
-- Leaflet lastet fra CDN (interaktiv kartvisning)
-- API-ruter på server-siden (`/api/geocode`, `/api/weather`)
-- Caching via `fetch(..., { next: { revalidate } })` og `Cache-Control`
+- API-ruter i appen (server-side)
 
-## Kom i gang lokalt
+## API-endepunkter
 
-### 1) Installer avhengigheter
+- `GET /api/geocode` – sted/adressesøk
+- `GET /api/weather` – værdata + score for punkt
+- `GET /api/route-analysis` – ruteanalyse for valgt punkt og km-intervall
+- `GET /api/weather-symbol` – servering av værikoner
 
-```bash
-npm install
-```
+## Miljøvariabler
 
-### 2) Sett miljøvariabler
-
-Opprett en fil `.env.local` i prosjektroten:
+Opprett `.env.local` i prosjektroten:
 
 ```env
 MET_USER_AGENT="RideSense/1.0 din-epost@domene.no"
 GEOCODE_USER_AGENT="RideSense/1.0 din-epost@domene.no"
-NETATMO_ACCESS_TOKEN="valgfri-oauth-token-for-offentlige-stasjoner"
+NETATMO_ACCESS_TOKEN="valgfri-token"
 ```
 
-> `User-Agent` er anbefalt av både MET og Nominatim.
+- `MET_USER_AGENT` brukes mot MET API.
+- `GEOCODE_USER_AGENT` brukes ved geokoding.
+- `NETATMO_ACCESS_TOKEN` er valgfri, men nødvendig om du vil bruke stasjonsobservasjoner.
 
-### 3) Kjør utviklingsserver
+## Kom i gang lokalt
 
 ```bash
+npm install
 npm run dev
 ```
 
-Åpne deretter [http://localhost:3000](http://localhost:3000).
+Åpne så: `http://localhost:3000`
 
-### 4) Kjør sjekker
+## Nyttige kommandoer
 
 ```bash
-npm run typecheck
 npm run lint
+npm run typecheck
 npm run build
+npm run download:weather-symbols
 ```
 
-## Prosjektstruktur
+> Merk: `download:weather-symbols` kjører et Python-skript som laster ned værikoner.
+
+## Prosjektstruktur (kort)
 
 ```text
 app/
   api/
-    geocode/route.ts      # stedssøk mot Nominatim
-    route-analysis/route.ts # samlet analyse av forhåndsdefinerte ruter
-    weather/route.ts      # værdata for lat/lon
-  globals.css
-  layout.tsx
-  page.tsx                # hovedside (søk, posisjon, visning)
+    geocode/route.ts
+    weather/route.ts
+    route-analysis/route.ts
+    weather-symbol/route.ts
+  page.tsx
 
 components/
-  BestWindowCard.tsx
-  LocationMap.tsx      # kart med flyttbar markør
-  RouteAnalysisPanel.tsx # rutevalg og sammenligning
-  ScoreBadge.tsx
+  LocationMap.tsx
   WeatherTable.tsx
+  RouteAnalysisPanel.tsx
+  BestWindowCard.tsx
+  ScoreBadge.tsx
+  ScoreModelInfo.tsx
+
+lib/
+  weather.ts
+  scoring.ts
+  route-analysis.ts
+  station-observations.ts
+  types.ts
 
 data/
   routes/
-    route-one.ts          # profil for Rute 1
-    route-two.ts          # profil for Rute 2
-    route-three.ts        # profil for Rute 3
-    index.ts
 
-lib/
-  route-analysis.ts       # veisøk + sampling + værhenting for ruter
-  scoring.ts              # scoringsmodell v1 + beste tidsvindu
-  types.ts                # delte typer/interfaces
-  weather.ts              # datainnhenting/transformering av værdata
+scripts/
+  download_weather_symbols.py
 ```
 
+## Begrensninger akkurat nå
 
-## Kartløsning (nytt)
+- Kvalitet i ruteanalyse avhenger av eksterne karttjenester.
+- Hvis eksterne API-er er trege/nede, vises feilmelding i appen.
+- Resultater er beslutningsstøtte og ikke en garanti for faktiske forhold.
 
-- Kartkomponenten er skilt ut i `components/LocationMap.tsx` for å beholde arkitekturen.
-- Kartgrunnlaget kommer fra åpne OpenStreetMap-kartfliser (`tile.openstreetmap.org`).
-- Markøren kan dras til ny posisjon. Når brukeren slipper markøren, hentes nye værdata automatisk fra `/api/weather`, og sykkelscoren beregnes på nytt med eksisterende logikk.
-- Kartet er mobilvennlig med responsiv høyde (`h-72` på mobil, `h-96` på større skjermer).
+## Videre forbedringer
 
-## Scoringsmodell v1 (enkelt forklart)
-
-Scoren starter på `100` for hver time. Deretter trekkes poeng for forhold som gjør sykling dårligere:
-
-- **Regn**: mer regn gir større trekk.
-- **Vind**: moderat og sterk vind trekker tydelig ned.
-- **Vindkast**: ekstra trekk ved kraftige kast.
-- **Temperatur**:
-  - best rundt 12–22 °C
-  - trekk for kaldt, varmt og svært varmt
-
-Alle terskler ligger samlet i `SCORE_THRESHOLDS` i `lib/scoring.ts`, så de er enkle å justere senere.
-
-## Ruteanalyse
-
-Ruteanalyse bygger videre på den samme timescoren som brukes for enkeltsteder, men først etter at brukeren har valgt et sted:
-
-1. Brukeren søker opp et sted, for eksempel `Bodø`.
-2. Deretter søker brukeren opp en konkret startadresse i det valgte stedet.
-3. Vær og kart knyttes til denne startadressen.
-4. Brukeren angir `min km` og `maks km` før analyse.
-5. Kilometergrensen tolkes som total tur/retur-distanse.
-6. Appen bruker tre generiske ruteprofiler: `Rute 1`, `Rute 2` og `Rute 3`.
-7. Hver profil ligger i sin egen datafil under `data/routes/`.
-8. På serveren hentes faktiske veier rundt valgt startadresse fra OpenStreetMap via Overpass.
-9. Veiene filtreres på relevante `highway`-typer og prioriterer `surface=asphalt`, med harde dekker som fallback dersom området har få asfalt-taggete veier.
-10. Mulige vendepunkter på disse veiene rutes deretter mot startadressen via faktisk veinett.
-11. Appen bygger 1-3 tur/retur-ruter som passer innenfor valgt km-intervall.
-12. Hver rute får `startplass` og `sluttplass` (vendepunkt), og total distanse inkluderer returen tilbake til start.
-13. Fem punkter samples jevnt fordelt langs hver rute.
-14. For hvert punkt hentes værdata fra MET via samme værlogikk som resten av appen.
-15. Nærmeste tilgjengelige værtime scores med eksisterende `calculateBikeScore`.
-16. Den nye funksjonen `calculateRouteScore` beregner en samlet score for ruten ved å:
-   - ta snittet av punkt-scorene
-   - trekke litt for stor variasjon mellom punktene, slik at ujevne ruter scorer lavere
-17. Appen sammenligner rutene og viser en kort forklaring, for eksempel:
-   - `Rute 1 er best nå på grunn av mindre vind og mindre risiko for nedbør.`
-18. Når brukeren velger en rute i UI-et, tegnes den tydelig på kartet og kartet sentreres på ruten.
-
-Dette gjør at ruteanalysen fortsatt er enkel, men den tar høyde for at værforhold kan variere underveis på samme tur.
-
-## Værstasjoner som supplement til prognose
-
-RideSense kan bruke observasjoner fra **Netatmo Weathermap** som et tillegg til MET-prognosen.
-Dette er laget som et eget lag i arkitekturen (`lib/station-observations.ts`) for å holde
-stasjonsdata og prognosedata tydelig atskilt.
-
-Slik fungerer det:
-
-1. Appen henter alltid prognose fra MET (hovedkilde).
-2. Hvis `NETATMO_ACCESS_TOKEN` er satt og en offentlig stasjon finnes i nærheten, hentes siste observasjon.
-3. Observasjonen brukes kun som supplement i de nærmeste timene.
-4. Hvis observasjon og prognose avviker tydelig, trekkes score noe ned og datatillit justeres.
-5. Hvis observasjon mangler, går appen automatisk videre med kun prognose (ingen hard avhengighet).
-
-I UI vises derfor eksplisitt om vurderingen bygger på:
-
-- `kun prognose`
-- `prognose + observasjon`
-
-## Arkitekturvalg
-
-- **UI-komponenter**: ligger i `components/`
-- **Datainnhenting**: `lib/weather.ts` + API-ruter i `app/api/`
-- **Stasjonsobservasjoner**: `lib/station-observations.ts` (valgfritt supplement)
-- **Scoringslogikk**: `lib/scoring.ts`
-- **Ruteanalyse**: `lib/route-analysis.ts` + `data/routes/`
-- **Typer/interfaces**: `lib/types.ts`
-
-Dette gjør løsningen enklere å vedlikeholde og bygge videre på.
-
-## Neste steg
-
-Forslag til konkrete utvidelser:
-
-1. **Kart**: vis valgt sted og værsoner direkte på kart.
-2. **Ruter**: la bruker lagre egne faste sykkelruter og få score per rute.
-3. **Værstasjoner**: vis nærmeste målestasjoner for mer lokal nøyaktighet.
-4. **Strava**: importer turhistorikk og gi personlige anbefalinger.
-5. **iPhone-app**: push-varsler når forholdene blir gode.
-
-## Driftsnotater
-
-- Vær hentes fra MET sitt `locationforecast`-API.
-- Stedssøk hentes fra OpenStreetMap Nominatim.
-- Veidata for ruter hentes fra OpenStreetMap Overpass.
-- API-kall cache’es for å redusere last og forbedre svartid.
-
+- personlige preferanser i score (f.eks. høyere toleranse for vind)
+- lagring av favorittruter
+- bedre historikk og sammenligning av planlagte turer
+- varslingsfunksjon når gode forhold oppstår
