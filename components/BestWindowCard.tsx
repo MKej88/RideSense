@@ -2,8 +2,10 @@ import { BestWindow } from "@/lib/types";
 
 function formatTime(time: string): string {
   return new Date(time).toLocaleTimeString("nb-NO", {
+    hour12: false,
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Europe/Oslo"
   });
 }
 
