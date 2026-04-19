@@ -1,6 +1,5 @@
 import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import Image from "next/image";
 
 function formatHour(time: string): string {
   return new Date(time).toLocaleString("nb-NO", {
@@ -74,8 +73,8 @@ function formatSymbol(symbolCode?: string): string {
 }
 
 function getSymbolIconUrl(symbolCode?: string): string | null {
-  const symbol = symbolCode || "unknown";
-  return `/api/weather-symbol?code=${encodeURIComponent(symbol)}`;
+  const symbol = (symbolCode || "unknown").toLowerCase();
+  return `/weather-symbols/${encodeURIComponent(symbol)}.svg`;
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
@@ -108,12 +107,17 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <td className="px-4 py-3">
                   {symbolIconUrl ? (
                     <div className="flex items-center justify-center">
-                      <Image
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={symbolIconUrl}
                         alt={formatSymbol(hour.symbolCode)}
+                        className="h-7 w-7"
                         width={28}
                         height={28}
-                        className="h-7 w-7"
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.src = "/weather-symbols/unknown.svg";
+                        }}
                       />
                     </div>
                   ) : (
