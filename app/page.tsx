@@ -50,6 +50,19 @@ const QUICK_CITIES: GeocodeResult[] = [
   { name: "Harstad", lat: 68.7985, lon: 16.5418 }
 ];
 
+const osloDayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Oslo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+const osloHourFormatter = new Intl.DateTimeFormat("nb-NO", {
+  hour: "2-digit",
+  hour12: false,
+  timeZone: "Europe/Oslo"
+});
+
 function getAreaContextLabel(place: GeocodeResult): string {
   const primaryName = place.name.split(",")[0]?.trim();
 
@@ -65,22 +78,11 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
 }
 
 function getOsloDayKey(time: string): string {
-  return new Date(time).toLocaleDateString("en-CA", {
-    timeZone: "Europe/Oslo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
+  return osloDayFormatter.format(new Date(time));
 }
 
 function getOsloHour(time: string): number {
-  return Number(
-    new Date(time).toLocaleTimeString("nb-NO", {
-      hour: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Oslo"
-    })
-  );
+  return Number(osloHourFormatter.format(new Date(time)));
 }
 
 function isCyclingHour(time: string): boolean {
@@ -98,9 +100,17 @@ function formatUpdatedAt(time: string): string {
   });
 }
 
-function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
-  const now = Date.now();
-  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() > now);
+function getNextHourTimestamp(nowMs: number): number {
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
+}
+
+function buildBestWindowFromHours(
+  hours: WeatherResponse["hours"],
+  analysisRunMs: number
+): BestWindow | null {
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
+  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
 
   if (futureHours.length === 0) {
     return null;
@@ -108,15 +118,22 @@ function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow |
 
   const windowSize = Math.min(3, futureHours.length);
   let bestStartIndex = 0;
-  let bestAverage = -1;
+  let rollingSum = 0;
 
-  for (let index = 0; index <= futureHours.length - windowSize; index += 1) {
-    const segment = futureHours.slice(index, index + windowSize);
-    const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
+  for (let index = 0; index < windowSize; index += 1) {
+    rollingSum += futureHours[index].score;
+  }
+
+  let bestAverage = rollingSum / windowSize;
+
+  for (let index = windowSize; index < futureHours.length; index += 1) {
+    rollingSum += futureHours[index].score;
+    rollingSum -= futureHours[index - windowSize].score;
+    const average = rollingSum / windowSize;
 
     if (average > bestAverage) {
       bestAverage = average;
-      bestStartIndex = index;
+      bestStartIndex = index - windowSize + 1;
     }
   }
 
@@ -152,6 +169,7 @@ export default function HomePage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [minDistanceKm, setMinDistanceKm] = useState("15");
   const [maxDistanceKm, setMaxDistanceKm] = useState("35");
+  const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const deferredQuery = useDeferredValue(query);
@@ -174,6 +192,7 @@ export default function HomePage() {
     setRouteAnalysis(null);
     setSelectedRouteId(null);
     setRouteError(null);
+    setAnalysisRunMs(null);
     setResults([]);
   }
 
@@ -337,6 +356,7 @@ export default function HomePage() {
     setWeather(null);
     setRouteAnalysis(null);
     setSelectedRouteId(null);
+    setAnalysisRunMs(null);
 
     try {
       const response = await fetch(
@@ -348,12 +368,14 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å hente værdata.");
       }
 
+      setAnalysisRunMs(Date.now());
       setWeather(payload);
       setResults([]);
       setAddressResults([]);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
       setWeather(null);
+      setAnalysisRunMs(null);
     } finally {
       setWeatherLoading(false);
     }
@@ -412,13 +434,14 @@ export default function HomePage() {
     routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
 
   const visibleWeatherHours = useMemo(() => {
-    if (!weather) {
+    if (!weather || analysisRunMs === null) {
       return [];
     }
 
+    const nextHourTs = getNextHourTimestamp(analysisRunMs);
+
     if (forecastRange === "7d") {
-      const now = Date.now();
-      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= now);
+      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
       const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
       const allowedDays = new Set(dayKeys.slice(0, 7));
 
@@ -427,15 +450,18 @@ export default function HomePage() {
       );
     }
 
-    const now = Date.now();
     const nextDayHours = weather.hours
-      .filter((hour) => new Date(hour.time).getTime() >= now)
+      .filter((hour) => new Date(hour.time).getTime() >= nextHourTs)
       .slice(0, 24);
 
     return nextDayHours.filter((hour) => isCyclingHour(hour.time));
-  }, [forecastRange, weather]);
+  }, [analysisRunMs, forecastRange, weather]);
 
   const forecastDays = useMemo(() => {
+    if (analysisRunMs === null) {
+      return [];
+    }
+
     const grouped = new Map<string, typeof visibleWeatherHours>();
 
     visibleWeatherHours.forEach((hour) => {
@@ -454,9 +480,9 @@ export default function HomePage() {
         timeZone: "Europe/Oslo"
       }),
       hours,
-      bestWindow: buildBestWindowFromHours(hours)
+      bestWindow: buildBestWindowFromHours(hours, analysisRunMs)
     }));
-  }, [visibleWeatherHours]);
+  }, [analysisRunMs, visibleWeatherHours]);
 
   useEffect(() => {
     if (forecastRange !== "7d") {
@@ -488,20 +514,30 @@ export default function HomePage() {
   );
 
   const visibleBestWindow24h = useMemo(() => {
-    if (forecastRange !== "24h") {
+    if (forecastRange !== "24h" || analysisRunMs === null) {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours);
-  }, [forecastRange, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
+  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
+
+  const includeDayInBestWindow24h = useMemo(() => {
+    if (!visibleBestWindow24h || analysisRunMs === null) {
+      return false;
+    }
+
+    const todayKey = getOsloDayKey(new Date(analysisRunMs).toISOString());
+    const startDayKey = getOsloDayKey(visibleBestWindow24h.startTime);
+    return todayKey !== startDayKey;
+  }, [analysisRunMs, visibleBestWindow24h]);
 
   const visibleBestWindow7d = useMemo(() => {
-    if (forecastRange !== "7d") {
+    if (forecastRange !== "7d" || analysisRunMs === null) {
       return null;
     }
 
-    return buildBestWindowFromHours(visibleWeatherHours);
-  }, [forecastRange, visibleWeatherHours]);
+    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
+  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
 
   const updatedWeatherAt = useMemo(() => {
     if (!weather) {
@@ -758,8 +794,9 @@ export default function HomePage() {
               <div className="mt-4">
                 <BestWindowCard
                   bestWindow={visibleBestWindow24h}
-                  title="Beste tidspunkt i dag"
-                  emptyMessage="Ingen timer igjen i dag å evaluere."
+                  title="Beste tidspunkt neste 24 timer"
+                  emptyMessage="Ingen tilgjengelige timer i de neste 24 timene."
+                  includeDay={includeDayInBestWindow24h}
                 />
               </div>
             )}
