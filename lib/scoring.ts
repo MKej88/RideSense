@@ -222,7 +222,11 @@ export function calculateBikeScore(
 
   const windGustPenalty = calculateWindGustPenalty(hour.windGust);
   score -= windGustPenalty;
-  if (windGustPenalty >= 8) {
+  if (hour.windGust !== undefined && hour.windGust >= 17) {
+    reasons.push("vindkast over 17 m/s: landeveissykling frarådes");
+  } else if (hour.windGust !== undefined && hour.windGust >= 14) {
+    reasons.push("vindkast nær 15 m/s: vurder skjermet rute eller å droppe turen");
+  } else if (windGustPenalty >= 8) {
     reasons.push("kraftige vindkast gir sikkerhetsrisiko");
   } else if (windGustPenalty > 0) {
     reasons.push("vindkast trekker ned");

@@ -35,6 +35,9 @@ Scoren bygger på:
 - temperatur (best rundt 18–22 °C)
 - skydekke (litt pluss når det er mindre skyer)
 
+Ved vindkast som nærmer seg **15 m/s** bør man vurdere skjermet rute eller å droppe turen.
+Ved vindkast over ca. **17–20 m/s** frarådes normalt landeveissykling.
+
 ### 3) Beste sykkelvindu
 
 Appen regner ut:

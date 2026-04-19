@@ -24,7 +24,8 @@ export function ScoreModelInfo() {
         <li>
           <strong>Vindkast (0 til -15 poeng):</strong> Hvis prognosen har vindkast, trekkes
           ekstra poeng ved kraftige kast. Små kast gir lite trekk, mens sikkerhetskritiske
-          kast trekker mer.
+          kast trekker mer. Rundt 15 m/s bør du vurdere skjermet rute, og fra ca. 17 m/s
+          frarådes landeveissykling.
         </li>
         <li>
           <strong>Skydekke (0–10 poeng):</strong> Klar himmel gir 10 poeng, tett skydekke
