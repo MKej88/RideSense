@@ -170,6 +170,28 @@ function calculateWindScore(windSpeed: number): number {
   return Math.max(0, 20 - Math.max(0, windSpeed) * 2);
 }
 
+function calculateWindGustPenalty(windGust?: number): number {
+  if (windGust === undefined) {
+    return 0;
+  }
+
+  const gust = Math.max(0, windGust);
+
+  if (gust < 10) {
+    return 0;
+  }
+
+  if (gust < 14) {
+    return Math.round((gust - 10) * 1);
+  }
+
+  if (gust < 18) {
+    return Math.round(4 + (gust - 14) * 1.5);
+  }
+
+  return Math.min(15, Math.round(10 + (gust - 18) * 1.25));
+}
+
 function calculateSunScore(cloudCoverPercent: number): number {
   const clampedClouds = Math.max(0, Math.min(100, cloudCoverPercent));
   return 10 * (1 - clampedClouds / 100);
@@ -196,6 +218,14 @@ export function calculateBikeScore(
     reasons.push("sterk vind gjør forholdene krevende");
   } else if (windScore <= 14) {
     reasons.push("moderat vind trekker ned");
+  }
+
+  const windGustPenalty = calculateWindGustPenalty(hour.windGust);
+  score -= windGustPenalty;
+  if (windGustPenalty >= 8) {
+    reasons.push("kraftige vindkast gir sikkerhetsrisiko");
+  } else if (windGustPenalty > 0) {
+    reasons.push("vindkast trekker ned");
   }
 
   const temperatureScore = calculateTemperatureScore(hour.airTemperature);

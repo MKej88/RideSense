@@ -31,6 +31,7 @@ Scoren bygger på:
 
 - nedbør (trekker ned)
 - vind (trekker ned)
+- vindkast (ekstra trekk ved kraftige kast, hvis vindkast finnes i prognosen)
 - temperatur (best rundt 18–22 °C)
 - skydekke (litt pluss når det er mindre skyer)
 
