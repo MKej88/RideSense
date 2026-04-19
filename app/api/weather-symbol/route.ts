@@ -52,6 +52,15 @@ async function fetchSymbolFromYr(symbolCode: string): Promise<string | null> {
   }
 }
 
+async function writeSymbolToCache(fileName: string, svgContent: string): Promise<void> {
+  try {
+    await fs.mkdir(SYMBOLS_DIR, { recursive: true });
+    await fs.writeFile(path.join(SYMBOLS_DIR, fileName), svgContent, "utf-8");
+  } catch {
+    // Best-effort cache write: some deployments have read-only filesystems.
+  }
+}
+
 function buildFallbackSymbolSvg(symbolCode: string): string {
   const isClear = symbolCode.includes("clearsky");
   const isPartlyCloudy = symbolCode.includes("partlycloudy") || symbolCode.includes("fair");
@@ -112,8 +121,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch {
     const remoteSvg = await fetchSymbolFromYr(requestedCode);
     if (remoteSvg) {
-      await fs.mkdir(SYMBOLS_DIR, { recursive: true });
-      await fs.writeFile(path.join(SYMBOLS_DIR, fileName), remoteSvg, "utf-8");
+      await writeSymbolToCache(fileName, remoteSvg);
 
       return new NextResponse(remoteSvg, {
         headers: {
