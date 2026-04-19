@@ -320,8 +320,16 @@ export function findBestWindowToday(hours: ScoredWeatherHour[]): {
   averageScore: number;
   explanation: string;
 } | null {
-  const today = new Date().toISOString().slice(0, 10);
-  const todayHours = hours.filter((hour) => hour.time.startsWith(today));
+  const osloToday = formatDateInTimeZone(new Date(), "Europe/Oslo");
+  const now = Date.now();
+  const todayHours = hours.filter((hour) => {
+    const hourDate = new Date(hour.time);
+    const isTodayInOslo =
+      formatDateInTimeZone(hourDate, "Europe/Oslo") === osloToday;
+    const isFutureHour = hourDate.getTime() >= now;
+
+    return isTodayInOslo && isFutureHour;
+  });
 
   if (todayHours.length === 0) {
     return null;
@@ -352,6 +360,15 @@ export function findBestWindowToday(hours: ScoredWeatherHour[]): {
     averageScore: Math.round(bestAverage),
     explanation: summarizeWindow(bestSegment)
   };
+}
+
+function formatDateInTimeZone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
 }
 
 function summarizeWindow(hours: ScoredWeatherHour[]): string {
