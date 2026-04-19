@@ -50,6 +50,19 @@ const QUICK_CITIES: GeocodeResult[] = [
   { name: "Harstad", lat: 68.7985, lon: 16.5418 }
 ];
 
+const osloDayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Oslo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+const osloHourFormatter = new Intl.DateTimeFormat("nb-NO", {
+  hour: "2-digit",
+  hour12: false,
+  timeZone: "Europe/Oslo"
+});
+
 function getAreaContextLabel(place: GeocodeResult): string {
   const primaryName = place.name.split(",")[0]?.trim();
 
@@ -65,22 +78,11 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
 }
 
 function getOsloDayKey(time: string): string {
-  return new Date(time).toLocaleDateString("en-CA", {
-    timeZone: "Europe/Oslo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
+  return osloDayFormatter.format(new Date(time));
 }
 
 function getOsloHour(time: string): number {
-  return Number(
-    new Date(time).toLocaleTimeString("nb-NO", {
-      hour: "2-digit",
-      hour12: false,
-      timeZone: "Europe/Oslo"
-    })
-  );
+  return Number(osloHourFormatter.format(new Date(time)));
 }
 
 function isCyclingHour(time: string): boolean {
@@ -108,15 +110,22 @@ function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow |
 
   const windowSize = Math.min(3, futureHours.length);
   let bestStartIndex = 0;
-  let bestAverage = -1;
+  let rollingSum = 0;
 
-  for (let index = 0; index <= futureHours.length - windowSize; index += 1) {
-    const segment = futureHours.slice(index, index + windowSize);
-    const average = segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
+  for (let index = 0; index < windowSize; index += 1) {
+    rollingSum += futureHours[index].score;
+  }
+
+  let bestAverage = rollingSum / windowSize;
+
+  for (let index = windowSize; index < futureHours.length; index += 1) {
+    rollingSum += futureHours[index].score;
+    rollingSum -= futureHours[index - windowSize].score;
+    const average = rollingSum / windowSize;
 
     if (average > bestAverage) {
       bestAverage = average;
-      bestStartIndex = index;
+      bestStartIndex = index - windowSize + 1;
     }
   }
 
@@ -416,8 +425,9 @@ export default function HomePage() {
       return [];
     }
 
+    const now = Date.now();
+
     if (forecastRange === "7d") {
-      const now = Date.now();
       const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= now);
       const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
       const allowedDays = new Set(dayKeys.slice(0, 7));
@@ -427,7 +437,6 @@ export default function HomePage() {
       );
     }
 
-    const now = Date.now();
     const nextDayHours = weather.hours
       .filter((hour) => new Date(hour.time).getTime() >= now)
       .slice(0, 24);
