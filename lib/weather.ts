@@ -120,6 +120,7 @@ export async function fetchForecastForLocation(
       airTemperature: details?.air_temperature ?? 0,
       precipitationAmount: resolvePrecipitationAmount(next1h, next6h, next12h),
       windSpeed: details?.wind_speed ?? 0,
+      cloudCoverPercent: Math.min(100, Math.max(0, details?.cloud_area_fraction ?? 100)),
       windFromDirection: details?.wind_from_direction,
       windGust: resolveWindGust(details, next1h, next6h, next12h)
     };

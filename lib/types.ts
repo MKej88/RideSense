@@ -11,6 +11,7 @@ export interface WeatherHourRaw {
   airTemperature: number;
   precipitationAmount: number;
   windSpeed: number;
+  cloudCoverPercent: number;
   windFromDirection?: number;
   windGust?: number;
 }
