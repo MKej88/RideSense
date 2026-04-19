@@ -6,8 +6,8 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "api.met.no",
-        pathname: "/images/weathericons/svg/**"
+        hostname: "www.yr.no",
+        pathname: "/assets/images/weather-symbols/dark-mode/default/svg/**"
       }
     ]
   }

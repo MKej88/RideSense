@@ -67,7 +67,10 @@ function formatSymbol(symbolCode?: string): string {
     return "-";
   }
 
-  return symbolCode.replaceAll("_", " ");
+  return symbolCode
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function getSymbolIconUrl(symbolCode?: string): string | null {
@@ -75,7 +78,7 @@ function getSymbolIconUrl(symbolCode?: string): string | null {
     return null;
   }
 
-  return `https://api.met.no/images/weathericons/svg/${symbolCode}.svg`;
+  return `https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg/${symbolCode}.svg`;
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
@@ -115,7 +118,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                         height={28}
                         className="h-7 w-7"
                       />
-                      <span className="capitalize">{formatSymbol(hour.symbolCode)}</span>
+                      <span>{formatSymbol(hour.symbolCode)}</span>
                     </div>
                   ) : (
                     "-"
