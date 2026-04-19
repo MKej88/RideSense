@@ -44,9 +44,19 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
   return query.trim() === getAreaContextLabel(place);
 }
 
+function getOsloDayKey(time: string): string {
+  return new Date(time).toLocaleDateString("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+}
+
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
+  const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
@@ -351,6 +361,52 @@ export default function HomePage() {
     });
   }, [forecastRange, weather]);
 
+  const forecastDays = useMemo(() => {
+    const grouped = new Map<string, typeof visibleWeatherHours>();
+
+    visibleWeatherHours.forEach((hour) => {
+      const key = getOsloDayKey(hour.time);
+      const existing = grouped.get(key) || [];
+      existing.push(hour);
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.entries()).map(([dayKey, hours]) => ({
+      dayKey,
+      label: new Date(hours[0].time).toLocaleDateString("nb-NO", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "Europe/Oslo"
+      }),
+      hours
+    }));
+  }, [visibleWeatherHours]);
+
+  useEffect(() => {
+    if (forecastRange !== "7d") {
+      return;
+    }
+
+    if (forecastDays.length === 0) {
+      setSelectedForecastDay(null);
+      return;
+    }
+
+    if (!selectedForecastDay || !forecastDays.some((day) => day.dayKey === selectedForecastDay)) {
+      setSelectedForecastDay(forecastDays[0].dayKey);
+    }
+  }, [forecastDays, forecastRange, selectedForecastDay]);
+
+  const displayedForecastHours = useMemo(() => {
+    if (forecastRange === "24h") {
+      return visibleWeatherHours;
+    }
+
+    const selectedDay = forecastDays.find((day) => day.dayKey === selectedForecastDay);
+    return selectedDay?.hours || [];
+  }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
+
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
       const movedPlace: GeocodeResult = {
@@ -479,7 +535,10 @@ export default function HomePage() {
                 <button
                   type="button"
                   className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-200"
-                  onClick={() => chooseArea(place)}
+                  onClick={() => {
+                    chooseArea(place);
+                    void loadWeatherForPlace(place);
+                  }}
                 >
                   {place.name}
                 </button>
@@ -494,67 +553,6 @@ export default function HomePage() {
           </p>
         )}
 
-        {selectedArea && (
-          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h2 className="text-base font-semibold text-slate-900">Startadresse</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Valgt sted: {selectedArea.name}. Søk nå opp en adresse innenfor dette stedet.
-            </p>
-
-            <div className="mt-4">
-              <input
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
-                placeholder={`Søk adresse i ${selectedArea.name}`}
-                value={addressQuery}
-                onChange={(event) => {
-                  setAddressQuery(event.target.value);
-                  setAddressError(null);
-                  setSelected(null);
-                  setWeather(null);
-                  setRouteAnalysis(null);
-                  setSelectedRouteId(null);
-                }}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                Adresselisten oppdateres automatisk mens du skriver.
-              </p>
-            </div>
-
-            {addressLoading && (
-              <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
-            )}
-
-            {addressError && (
-              <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
-            )}
-
-            {addressResults.length > 0 && (
-              <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                {addressResults.map((place) => (
-                  <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
-                      onClick={() => loadWeatherForPlace(place)}
-                    >
-                      {place.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {!addressLoading &&
-              !addressError &&
-              addressQuery.trim().length >= 2 &&
-              addressResults.length === 0 && (
-              <p className="mt-3 text-sm text-slate-600">
-                Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
-              </p>
-            )}
-          </div>
-        )}
-
         {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
       </section>
@@ -567,17 +565,6 @@ export default function HomePage() {
 
       {weatherLoading && (
         <section className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Laster data …</section>
-      )}
-
-      {selected && (
-        <LocationMap
-          lat={selected.lat}
-          lon={selected.lon}
-          label={selected.name}
-          onMarkerMoved={onMarkerMoved}
-          routeName={selectedRoute?.shortName || null}
-          routePoints={selectedRoute?.points || []}
-        />
       )}
 
       {weather && activeTab === "forecast" && (
@@ -640,8 +627,30 @@ export default function HomePage() {
                 ? "Ingen timer igjen i dag å evaluere."
                 : "Fant ikke tilgjengelige timer i de neste 7 dagene."
             }
+            includeDay={forecastRange === "7d"}
           />
-          <WeatherTable hours={visibleWeatherHours} />
+
+          {forecastRange === "7d" && forecastDays.length > 0 && (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="flex min-w-max gap-2">
+                {forecastDays.map((day) => (
+                  <button
+                    key={day.dayKey}
+                    type="button"
+                    onClick={() => setSelectedForecastDay(day.dayKey)}
+                    className={`rounded-lg px-3 py-2 text-sm ${
+                      day.dayKey === selectedForecastDay
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <WeatherTable hours={displayedForecastHours} />
         </section>
       )}
 
@@ -652,6 +661,65 @@ export default function HomePage() {
             <p className="mt-1 text-sm text-slate-600">
               Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
             </p>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="text-base font-semibold text-slate-900">Startadresse (kun ruteanalyse)</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
+              </p>
+
+              <input
+                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+                placeholder={
+                  selectedArea
+                    ? `Søk adresse i ${selectedArea.name}`
+                    : "Velg sted på hovedfanen først"
+                }
+                value={addressQuery}
+                onChange={(event) => {
+                  setAddressQuery(event.target.value);
+                  setAddressError(null);
+                  setSelected(null);
+                  setRouteAnalysis(null);
+                  setSelectedRouteId(null);
+                }}
+                disabled={!selectedArea}
+              />
+
+              {addressLoading && (
+                <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
+              )}
+
+              {addressError && (
+                <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
+              )}
+
+              {addressResults.length > 0 && (
+                <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                  {addressResults.map((place) => (
+                    <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                      <button
+                        type="button"
+                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+                        onClick={() => void loadWeatherForPlace(place)}
+                      >
+                        {place.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {!addressLoading &&
+                !addressError &&
+                selectedArea &&
+                addressQuery.trim().length >= 2 &&
+                addressResults.length === 0 && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
+                  </p>
+                )}
+            </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-slate-50 p-3">
@@ -705,6 +773,17 @@ export default function HomePage() {
             />
           )}
         </section>
+      )}
+
+      {selected && (
+        <LocationMap
+          lat={selected.lat}
+          lon={selected.lon}
+          label={selected.name}
+          onMarkerMoved={onMarkerMoved}
+          routeName={selectedRoute?.shortName || null}
+          routePoints={selectedRoute?.points || []}
+        />
       )}
     </main>
   );

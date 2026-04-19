@@ -2,9 +2,11 @@ import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
 
 function formatHour(time: string): string {
-  return new Date(time).toLocaleTimeString("nb-NO", {
+  return new Date(time).toLocaleString("nb-NO", {
+    weekday: "long",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Europe/Oslo"
   });
 }
 
