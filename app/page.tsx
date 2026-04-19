@@ -101,10 +101,8 @@ function formatUpdatedAt(time: string): string {
 }
 
 function getNextHourTimestamp(nowMs: number): number {
-  const nextHour = new Date(nowMs);
-  nextHour.setMinutes(0, 0, 0);
-  nextHour.setHours(nextHour.getHours() + 1);
-  return nextHour.getTime();
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
 }
 
 function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
