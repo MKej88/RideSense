@@ -1,8 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BestWindow, GeocodeResult, RouteWindAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BestWindow,
+  GeocodeResult,
+  RouteWindAnalysisResponse,
+  RouteWindHour
+} from "@/lib/types";
 
 interface ApiError {
   error: string;
@@ -20,92 +25,18 @@ const LocationMap = dynamic(
     ssr: false
   }
 );
-const ScoreModelInfo = dynamic(
-  () => import("@/components/ScoreModelInfo").then((module) => module.ScoreModelInfo)
-);
 const WeatherTable = dynamic(
   () => import("@/components/WeatherTable").then((module) => module.WeatherTable)
 );
 
-const PLACE_SEARCH_DEBOUNCE_MS = 180;
-const ADDRESS_SEARCH_DEBOUNCE_MS = 180;
-const QUICK_CITIES: GeocodeResult[] = [
-  { name: "Oslo", lat: 59.9139, lon: 10.7522 },
-  { name: "Bærum", lat: 59.8939, lon: 10.523 },
-  { name: "Drammen", lat: 59.7439, lon: 10.2045 },
-  { name: "Kristiansand", lat: 58.1467, lon: 7.9956 },
-  { name: "Arendal", lat: 58.4615, lon: 8.7725 },
-  { name: "Grimstad", lat: 58.3405, lon: 8.5934 },
-  { name: "Bergen", lat: 60.39299, lon: 5.32415 },
-  { name: "Stavanger", lat: 58.97, lon: 5.7331 },
-  { name: "Sandnes", lat: 58.8518, lon: 5.7362 },
-  { name: "Trondheim", lat: 63.4305, lon: 10.3951 },
-  { name: "Stjørdal", lat: 63.468, lon: 10.927 },
-  { name: "Steinkjer", lat: 64.015, lon: 11.4954 },
-  { name: "Tromsø", lat: 69.6492, lon: 18.9553 },
-  { name: "Bodø", lat: 67.2804, lon: 14.4049 },
-  { name: "Harstad", lat: 68.7985, lon: 16.5418 }
-];
-
-const osloDayFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Oslo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit"
-});
-
-const osloHourFormatter = new Intl.DateTimeFormat("nb-NO", {
-  hour: "2-digit",
-  hour12: false,
-  timeZone: "Europe/Oslo"
-});
-
-function getAreaContextLabel(place: GeocodeResult): string {
-  const primaryName = place.name.split(",")[0]?.trim();
-
-  return primaryName || place.county || "Norge";
-}
-
-function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
-  if (!place) {
-    return false;
-  }
-
-  return query.trim() === getAreaContextLabel(place);
-}
-
-function getOsloDayKey(time: string): string {
-  return osloDayFormatter.format(new Date(time));
-}
-
-function getOsloHour(time: string): number {
-  return Number(osloHourFormatter.format(new Date(time)));
-}
-
-function isCyclingHour(time: string): boolean {
-  return getOsloHour(time) >= 6;
-}
-
-function formatUpdatedAt(time: string): string {
-  return new Date(time).toLocaleString("nb-NO", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Oslo"
-  });
-}
+const SEARCH_DEBOUNCE_MS = 200;
 
 function getNextHourTimestamp(nowMs: number): number {
-  const ONE_HOUR_MS = 60 * 60 * 1000;
-  return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
+  const oneHourMs = 60 * 60 * 1000;
+  return Math.floor(nowMs / oneHourMs) * oneHourMs + oneHourMs;
 }
 
-function buildBestWindowFromHours(
-  hours: WeatherResponse["hours"],
-  analysisRunMs: number
-): BestWindow | null {
+function buildBestWindowFromHours(hours: RouteWindHour[], analysisRunMs: number): BestWindow | null {
   const nextHourTs = getNextHourTimestamp(analysisRunMs);
   const futureHours = hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
 
@@ -140,95 +71,82 @@ function buildBestWindowFromHours(
     startTime: bestSegment[0].time,
     endTime: bestSegment[bestSegment.length - 1].time,
     averageScore: Math.round(bestAverage),
-    explanation: "Beste synlige tidsvindu basert på gjennomsnittlig værscore."
+    explanation: "Dette vinduet scorer best for din valgte rute (inkludert medvind)."
   };
 }
 
+function filterHoursNext24(hours: RouteWindHour[], analysisRunMs: number): RouteWindHour[] {
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
+
+  return hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs).slice(0, 24);
+}
+
+function filterHoursNext7Days(hours: RouteWindHour[], analysisRunMs: number): RouteWindHour[] {
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
+  const ms7Days = 7 * 24 * 60 * 60 * 1000;
+
+  return hours.filter((hour) => {
+    const hourTs = new Date(hour.time).getTime();
+    return hourTs >= nextHourTs && hourTs <= nextHourTs + ms7Days;
+  });
+}
+
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
-  const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
-  const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GeocodeResult[]>([]);
-  const [placeLoading, setPlaceLoading] = useState(false);
-  const [selectedArea, setSelectedArea] = useState<GeocodeResult | null>(null);
-  const [addressQuery, setAddressQuery] = useState("");
-  const [addressResults, setAddressResults] = useState<GeocodeResult[]>([]);
-  const [addressLoading, setAddressLoading] = useState(false);
-  const [addressError, setAddressError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<GeocodeResult | null>(null);
-  const [weather, setWeather] = useState<WeatherResponse | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [startQuery, setStartQuery] = useState("");
+  const [startResults, setStartResults] = useState<GeocodeResult[]>([]);
+  const [startLoading, setStartLoading] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [start, setStart] = useState<GeocodeResult | null>(null);
+
+  const [endQuery, setEndQuery] = useState("");
+  const [endResults, setEndResults] = useState<GeocodeResult[]>([]);
+  const [endLoading, setEndLoading] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
+  const [end, setEnd] = useState<GeocodeResult | null>(null);
+
   const [routeAnalysis, setRouteAnalysis] = useState<RouteWindAnalysisResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [routeStart, setRouteStart] = useState<GeocodeResult | null>(null);
-  const [routeEnd, setRouteEnd] = useState<GeocodeResult | null>(null);
   const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
-  const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const deferredQuery = useDeferredValue(query);
-  const deferredAddressQuery = useDeferredValue(addressQuery);
 
-  const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
-
-  function searchPlace(event: FormEvent): void {
-    event.preventDefault();
-  }
-
-  function chooseArea(place: GeocodeResult): void {
-    setQuery(getAreaContextLabel(place));
-    setSelectedArea(place);
-    setAddressQuery("");
-    setAddressResults([]);
-    setAddressError(null);
-    setSelected(null);
-    setWeather(null);
-    setRouteAnalysis(null);
-    setRouteError(null);
-    setAnalysisRunMs(null);
-    setResults([]);
-  }
+  const startCacheRef = useRef(new Map<string, GeocodeResult[]>());
+  const endCacheRef = useRef(new Map<string, GeocodeResult[]>());
+  const deferredStartQuery = useDeferredValue(startQuery);
+  const deferredEndQuery = useDeferredValue(endQuery);
 
   useEffect(() => {
-    const trimmedQuery = deferredQuery.trim();
+    const query = deferredStartQuery.trim();
 
-    if (isSameAreaQuery(trimmedQuery, selectedArea)) {
-      setPlaceLoading(false);
-      return;
-    }
-
-    if (trimmedQuery.length < 2) {
-      setResults([]);
-      setPlaceLoading(false);
+    if (query.length < 3 || query === start?.name) {
+      setStartResults([]);
+      setStartLoading(false);
+      setStartError(null);
       return;
     }
 
     let active = true;
-    const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
+    const cacheKey = query.toLocaleLowerCase("nb-NO");
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
-      const cachedResults = placeCacheRef.current.get(cacheKey);
+      const cached = startCacheRef.current.get(cacheKey);
 
-      if (cachedResults) {
-        setResults(cachedResults);
-        setPlaceLoading(false);
-        setError(null);
+      if (cached) {
+        setStartResults(cached);
+        setStartLoading(false);
         return;
       }
 
-      setPlaceLoading(true);
-      setError(null);
+      setStartLoading(true);
+      setStartError(null);
 
       try {
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
           signal: controller.signal
         });
         const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
 
         if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke sted.");
+          throw new Error(payload.error || "Klarte ikke å søke startadresse.");
         }
 
         if (!active) {
@@ -236,8 +154,8 @@ export default function HomePage() {
         }
 
         const nextResults = payload.results || [];
-        placeCacheRef.current.set(cacheKey, nextResults);
-        setResults(nextResults);
+        startCacheRef.current.set(cacheKey, nextResults);
+        setStartResults(nextResults);
       } catch (caughtError) {
         if (!active) {
           return;
@@ -247,66 +165,57 @@ export default function HomePage() {
           return;
         }
 
-        setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stedsøk.");
-        setResults([]);
+        setStartError(
+          caughtError instanceof Error ? caughtError.message : "Ukjent feil ved start-søk."
+        );
+        setStartResults([]);
       } finally {
         if (active) {
-          setPlaceLoading(false);
+          setStartLoading(false);
         }
       }
-    }, PLACE_SEARCH_DEBOUNCE_MS);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       active = false;
       controller.abort();
       window.clearTimeout(timeoutId);
-      setPlaceLoading(false);
     };
-  }, [deferredQuery, selectedArea]);
+  }, [deferredStartQuery, start?.name]);
 
   useEffect(() => {
-    if (!selectedArea) {
-      return;
-    }
+    const query = deferredEndQuery.trim();
 
-    const trimmedQuery = deferredAddressQuery.trim();
-
-    if (trimmedQuery.length < 2) {
-      setAddressResults([]);
-      setAddressError(null);
-      setAddressLoading(false);
+    if (query.length < 3 || query === end?.name) {
+      setEndResults([]);
+      setEndLoading(false);
+      setEndError(null);
       return;
     }
 
     let active = true;
-    const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${selectedArea.lat.toFixed(4)}::${selectedArea.lon.toFixed(4)}`;
+    const cacheKey = query.toLocaleLowerCase("nb-NO");
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
-      const cachedResults = addressCacheRef.current.get(cacheKey);
+      const cached = endCacheRef.current.get(cacheKey);
 
-      if (cachedResults) {
-        setAddressResults(cachedResults);
-        setAddressLoading(false);
-        setAddressError(null);
+      if (cached) {
+        setEndResults(cached);
+        setEndLoading(false);
         return;
       }
 
-      setAddressLoading(true);
-      setAddressError(null);
+      setEndLoading(true);
+      setEndError(null);
 
       try {
-        const response = await fetch(
-          `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(
-            areaContext
-          )}&nearLat=${selectedArea.lat}&nearLon=${selectedArea.lon}`,
-          {
-            signal: controller.signal
-          }
-        );
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal
+        });
         const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
 
         if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke adresse.");
+          throw new Error(payload.error || "Klarte ikke å søke stopadresse.");
         }
 
         if (!active) {
@@ -314,8 +223,8 @@ export default function HomePage() {
         }
 
         const nextResults = payload.results || [];
-        addressCacheRef.current.set(cacheKey, nextResults);
-        setAddressResults(nextResults);
+        endCacheRef.current.set(cacheKey, nextResults);
+        setEndResults(nextResults);
       } catch (caughtError) {
         if (!active) {
           return;
@@ -325,59 +234,25 @@ export default function HomePage() {
           return;
         }
 
-        setAddressError(
-          caughtError instanceof Error ? caughtError.message : "Ukjent feil ved adressesøk."
-        );
-        setAddressResults([]);
+        setEndError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stopp-søk.");
+        setEndResults([]);
       } finally {
         if (active) {
-          setAddressLoading(false);
+          setEndLoading(false);
         }
       }
-    }, ADDRESS_SEARCH_DEBOUNCE_MS);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       active = false;
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [deferredAddressQuery, areaContext, selectedArea]);
+  }, [deferredEndQuery, end?.name]);
 
-  const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
-    setWeatherLoading(true);
-    setError(null);
-    setRouteError(null);
-    setSelected(place);
-    setWeather(null);
-    setRouteAnalysis(null);
-    setAnalysisRunMs(null);
-
-    try {
-      const response = await fetch(
-        `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`
-      );
-      const payload = (await response.json()) as WeatherResponse & ApiError;
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å hente værdata.");
-      }
-
-      setAnalysisRunMs(Date.now());
-      setWeather(payload);
-      setResults([]);
-      setAddressResults([]);
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
-      setWeather(null);
-      setAnalysisRunMs(null);
-    } finally {
-      setWeatherLoading(false);
-    }
-  }, []);
-
-  const analyzeRoutes = useCallback(async (): Promise<void> => {
-    if (!routeStart || !routeEnd) {
-      setRouteError("Velg både startadresse og stopadresse før analyse.");
+  async function analyzeRoute(): Promise<void> {
+    if (!start || !end) {
+      setRouteError("Velg både start og stopp før analyse.");
       return;
     }
 
@@ -387,9 +262,9 @@ export default function HomePage() {
 
     try {
       const response = await fetch(
-        `/api/route-analysis?startLat=${routeStart.lat}&startLon=${routeStart.lon}&startLabel=${encodeURIComponent(
-          routeStart.name
-        )}&endLat=${routeEnd.lat}&endLon=${routeEnd.lon}&endLabel=${encodeURIComponent(routeEnd.name)}`
+        `/api/route-analysis?startLat=${start.lat}&startLon=${start.lon}&startLabel=${encodeURIComponent(
+          start.name
+        )}&endLat=${end.lat}&endLon=${end.lon}&endLabel=${encodeURIComponent(end.name)}`
       );
       const payload = (await response.json()) as RouteWindAnalysisResponse & ApiError;
 
@@ -400,574 +275,170 @@ export default function HomePage() {
       setAnalysisRunMs(Date.now());
       setRouteAnalysis(payload);
     } catch (caughtError) {
-      setRouteError(
-        caughtError instanceof Error ? caughtError.message : "Ukjent feil ved ruteanalyse."
-      );
+      setRouteError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved analyse.");
       setRouteAnalysis(null);
     } finally {
       setRouteLoading(false);
     }
-  }, [routeEnd, routeStart]);
+  }
 
-  const visibleWeatherHours = useMemo(() => {
-    if (!weather || analysisRunMs === null) {
+  const hours24 = useMemo(() => {
+    if (!routeAnalysis || analysisRunMs === null) {
       return [];
     }
 
-    const nextHourTs = getNextHourTimestamp(analysisRunMs);
+    return filterHoursNext24(routeAnalysis.hours, analysisRunMs);
+  }, [analysisRunMs, routeAnalysis]);
 
-    if (forecastRange === "7d") {
-      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
-      const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
-      const allowedDays = new Set(dayKeys.slice(0, 7));
-
-      return futureHours.filter(
-        (hour) => allowedDays.has(getOsloDayKey(hour.time)) && isCyclingHour(hour.time)
-      );
-    }
-
-    const nextDayHours = weather.hours
-      .filter((hour) => new Date(hour.time).getTime() >= nextHourTs)
-      .slice(0, 24);
-
-    return nextDayHours.filter((hour) => isCyclingHour(hour.time));
-  }, [analysisRunMs, forecastRange, weather]);
-
-  const forecastDays = useMemo(() => {
-    if (analysisRunMs === null) {
+  const hours7d = useMemo(() => {
+    if (!routeAnalysis || analysisRunMs === null) {
       return [];
     }
 
-    const grouped = new Map<string, typeof visibleWeatherHours>();
-
-    visibleWeatherHours.forEach((hour) => {
-      const key = getOsloDayKey(hour.time);
-      const existing = grouped.get(key) || [];
-      existing.push(hour);
-      grouped.set(key, existing);
-    });
-
-    return Array.from(grouped.entries()).map(([dayKey, hours]) => ({
-      dayKey,
-      label: new Date(hours[0].time).toLocaleDateString("nb-NO", {
-        weekday: "long",
-        day: "2-digit",
-        month: "2-digit",
-        timeZone: "Europe/Oslo"
-      }),
-      hours,
-      bestWindow: buildBestWindowFromHours(hours, analysisRunMs)
-    }));
-  }, [analysisRunMs, visibleWeatherHours]);
-
-  useEffect(() => {
-    if (forecastRange !== "7d") {
-      return;
-    }
-
-    if (forecastDays.length === 0) {
-      setSelectedForecastDay(null);
-      return;
-    }
-
-    if (!selectedForecastDay || !forecastDays.some((day) => day.dayKey === selectedForecastDay)) {
-      setSelectedForecastDay(forecastDays[0].dayKey);
-    }
-  }, [forecastDays, forecastRange, selectedForecastDay]);
-
-  const displayedForecastHours = useMemo(() => {
-    if (forecastRange === "24h") {
-      return visibleWeatherHours;
-    }
-
-    const selectedDay = forecastDays.find((day) => day.dayKey === selectedForecastDay);
-    return selectedDay?.hours || [];
-  }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
-
-  const selectedForecastDayData = useMemo(
-    () => forecastDays.find((day) => day.dayKey === selectedForecastDay) || null,
-    [forecastDays, selectedForecastDay]
-  );
-
-  const visibleBestWindow24h = useMemo(() => {
-    if (forecastRange !== "24h" || analysisRunMs === null) {
-      return null;
-    }
-
-    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
-  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
-
-  const includeDayInBestWindow24h = useMemo(() => {
-    if (!visibleBestWindow24h || analysisRunMs === null) {
-      return false;
-    }
-
-    const todayKey = getOsloDayKey(new Date(analysisRunMs).toISOString());
-    const startDayKey = getOsloDayKey(visibleBestWindow24h.startTime);
-    return todayKey !== startDayKey;
-  }, [analysisRunMs, visibleBestWindow24h]);
-
-  const visibleBestWindow7d = useMemo(() => {
-    if (forecastRange !== "7d" || analysisRunMs === null) {
-      return null;
-    }
-
-    return buildBestWindowFromHours(visibleWeatherHours, analysisRunMs);
-  }, [analysisRunMs, forecastRange, visibleWeatherHours]);
-
-  const updatedWeatherAt = useMemo(() => {
-    if (!weather) {
-      return null;
-    }
-
-    return weather.observationSummary.observedAt || weather.hours[0]?.time || null;
-  }, [weather]);
-
-  const onMarkerMoved = useCallback(
-    async (lat: number, lon: number): Promise<void> => {
-      const movedPlace: GeocodeResult = {
-        name: "Valgt punkt på kart",
-        lat,
-        lon
-      };
-
-      await loadWeatherForPlace(movedPlace);
-    },
-    [loadWeatherForPlace]
-  );
+    return filterHoursNext7Days(routeAnalysis.hours, analysisRunMs);
+  }, [analysisRunMs, routeAnalysis]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
-      <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(45,212,191,0.28),rgba(2,11,35,0)_38%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_85%,rgba(14,165,233,0.22),rgba(2,11,35,0)_45%)]" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#020b23]/95 via-[#031533]/78 to-[#021021]/58" />
-          <svg viewBox="0 0 1000 320" className="absolute inset-x-0 bottom-0 h-[72%] w-full opacity-90" aria-hidden="true">
-            <defs>
-              <linearGradient id="heroPathGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0" />
-                <stop offset="48%" stopColor="#22d3ee" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.28" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M-40 250 C140 225, 220 150, 360 176 S610 260, 1030 72"
-              fill="none"
-              stroke="url(#heroPathGlow)"
-              strokeWidth="6"
-              strokeLinecap="round"
-            />
-            <path
-              d="M-80 275 C140 244, 300 298, 500 262 S810 190, 1060 162"
-              fill="none"
-              stroke="rgba(34,211,238,0.28)"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
+      <section className="rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold text-slate-100">Ruteanalyse</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Søk adresse i begge feltene. Vi analyserer akkurat din rute og løfter tidspunkt med medvind.
+        </p>
 
-        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/55 px-3 py-1 text-xs font-medium text-cyan-100 backdrop-blur-md">
-              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
-              Smart sykkelprognose
-            </div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">RideSense</h1>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-100/95 md:text-xl">
-              Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
-            </p>
-
-            <div className="mt-6 inline-flex rounded-2xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur-md">
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "forecast"
-                    ? "bg-[#061739] text-cyan-100 ring-1 ring-cyan-300/45 shadow-[0_6px_18px_-10px_rgba(34,211,238,0.8)]"
-                    : "text-slate-200 hover:bg-cyan-400/10"
-                }`}
-                onClick={() => setActiveTab("forecast")}
-              >
-                Vær og tidspunkt
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "routes"
-                    ? "bg-gradient-to-r from-cyan-500/95 to-teal-400/90 text-slate-950 shadow-[0_8px_22px_-12px_rgba(45,212,191,0.8)]"
-                    : "text-slate-200 hover:bg-cyan-400/10"
-                }`}
-                onClick={() => setActiveTab("routes")}
-              >
-                Ruteanalyse
-              </button>
-            </div>
-          </div>
-
-          <div className="relative hidden min-h-[240px] items-center justify-center lg:flex">
-            <div className="absolute right-4 top-4 rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
-                <path
-                  d="M18 34a10 10 0 1 1 4-19 12 12 0 0 1 22 8h1a8 8 0 1 1 0 16H18z"
-                  fill="none"
-                  stroke="#67e8f9"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="42" cy="13" r="3" fill="#5eead4" />
-              </svg>
-            </div>
-            <div className="absolute right-16 top-[96px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 68 44" className="h-10 w-14" aria-hidden="true">
-                <circle cx="14" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <circle cx="50" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <path
-                  d="M14 30l14-14h12l14 14M28 16l-7-6h-9"
-                  fill="none"
-                  stroke="#2dd4bf"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <div className="absolute right-0 top-[126px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
-                <circle cx="28" cy="28" r="20" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <path d="M28 28V15M28 28l10 6" stroke="#99f6e4" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
-        <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
-
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
-          <input
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-            placeholder="Søk sted i Norge"
-            value={query}
-            onChange={(event) => {
-              const nextQuery = event.target.value;
-              setQuery(nextQuery);
-
-              if (!isSameAreaQuery(nextQuery, selectedArea)) {
-                setSelectedArea(null);
-                setAddressQuery("");
-                setAddressResults([]);
-                setAddressError(null);
-                setSelected(null);
-                setWeather(null);
+            <label className="text-sm font-medium text-slate-200">Startadresse</label>
+            <input
+              value={startQuery}
+              onChange={(event) => {
+                setStartQuery(event.target.value);
+                setStart(null);
                 setRouteAnalysis(null);
                 setRouteError(null);
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-600 disabled:opacity-60"
-            disabled={weatherLoading || addressLoading || placeLoading || query.trim().length < 2}
-          >
-            Søk
-          </button>
-        </form>
-        <div className="mt-4">
-          <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
-          <div className="grid grid-cols-5 gap-2">
-            {QUICK_CITIES.map((city) => (
-              <button
-                key={`${city.name}-${city.lat}-${city.lon}`}
-                type="button"
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
-                onClick={() => {
-                  chooseArea(city);
-                  void loadWeatherForPlace(city);
-                }}
-                disabled={weatherLoading || addressLoading || placeLoading}
-              >
-                {city.name}
-              </button>
-            ))}
+              }}
+              placeholder="Søk startadresse"
+              className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+            />
+            {start && <p className="mt-2 text-xs text-emerald-300">Valgt: {start.name}</p>}
+            {startLoading && <p className="mt-2 text-xs text-slate-400">Søker …</p>}
+            {startError && <p className="mt-2 text-xs text-rose-300">{startError}</p>}
+            {startResults.length > 0 && (
+              <ul className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70 p-2">
+                {startResults.map((place) => (
+                  <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStart(place);
+                        setStartQuery(place.name);
+                        setStartResults([]);
+                      }}
+                      className="w-full rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+                    >
+                      {place.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-200">Stopadresse</label>
+            <input
+              value={endQuery}
+              onChange={(event) => {
+                setEndQuery(event.target.value);
+                setEnd(null);
+                setRouteAnalysis(null);
+                setRouteError(null);
+              }}
+              placeholder="Søk stopadresse"
+              className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+            />
+            {end && <p className="mt-2 text-xs text-emerald-300">Valgt: {end.name}</p>}
+            {endLoading && <p className="mt-2 text-xs text-slate-400">Søker …</p>}
+            {endError && <p className="mt-2 text-xs text-rose-300">{endError}</p>}
+            {endResults.length > 0 && (
+              <ul className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70 p-2">
+                {endResults.map((place) => (
+                  <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEnd(place);
+                        setEndQuery(place.name);
+                        setEndResults([]);
+                      }}
+                      className="w-full rounded-md px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+                    >
+                      {place.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
-        {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
+        <button
+          type="button"
+          onClick={() => void analyzeRoute()}
+          disabled={!start || !end || routeLoading}
+          className="mt-5 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {routeLoading ? "Analyserer ruten …" : "Finn beste tidspunkt"}
+        </button>
 
-        {results.length > 0 && (
-          <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-            {results.map((place) => (
-              <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                <button
-                  type="button"
-                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
-                  onClick={() => {
-                    chooseArea(place);
-                    void loadWeatherForPlace(place);
-                  }}
-                >
-                  {place.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {!placeLoading && query.trim().length >= 2 && results.length === 0 && !selectedArea && !error && (
-          <p className="mt-3 text-sm text-slate-400">
-            Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
-          </p>
-        )}
-
-        {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
-
+        {routeError && <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{routeError}</p>}
       </section>
 
-      {!weather && !weatherLoading && !error && (
-        <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
-          Velg et sted for å se værtime-for-time, værscore og dagens beste tidsvindu.
-        </section>
-      )}
-
-      {weatherLoading && (
-        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
-      )}
-
-      {weather && activeTab === "forecast" && (
+      {routeAnalysis && analysisRunMs !== null && (
         <section className="space-y-4">
-          <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
-            <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
-            <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
-              <button
-                type="button"
-                onClick={() => setForecastRange("24h")}
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  forecastRange === "24h"
-                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
-                    : "text-slate-300"
-                }`}
-              >
-                Neste 24 timer
-              </button>
-              <button
-                type="button"
-                onClick={() => setForecastRange("7d")}
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  forecastRange === "7d"
-                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
-                    : "text-slate-300"
-                }`}
-              >
-                Neste 7 dager
-              </button>
-            </div>
-
-            {forecastRange === "24h" && (
-              <div className="mt-4">
-                <BestWindowCard
-                  bestWindow={visibleBestWindow24h}
-                  title="Beste tidspunkt neste 24 timer"
-                  emptyMessage="Ingen tilgjengelige timer i de neste 24 timene."
-                  includeDay={includeDayInBestWindow24h}
-                />
-              </div>
-            )}
-            {forecastRange === "7d" && (
-              <div className="mt-4">
-                <BestWindowCard
-                  bestWindow={visibleBestWindow7d}
-                  title="Beste tidspunkt neste 7 dager"
-                  emptyMessage="Fant ikke tilgjengelige timer i de neste 7 dagene."
-                  includeDay
-                />
-              </div>
-            )}
-
-            <p className="mt-2 text-sm text-slate-400">
-              {forecastRange === "24h"
-                ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
-                : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+            <p className="text-sm text-slate-200">
+              <strong>{routeAnalysis.start.name}</strong> → <strong>{routeAnalysis.end.name}</strong>
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              {updatedWeatherAt && (
-                <p className="text-sm text-slate-300">
-                  Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  const placeToRefresh = selected || selectedArea;
-                  if (!placeToRefresh) {
-                    return;
-                  }
-                  void loadWeatherForPlace(placeToRefresh);
-                }}
-                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                disabled={weatherLoading || (!selected && !selectedArea)}
-              >
-                Oppdater værdata
-              </button>
-            </div>
-          </div>
-
-          {forecastRange === "7d" && forecastDays.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-sm">
-              <div className="flex min-w-max gap-2">
-                {forecastDays.map((day) => (
-                  <button
-                    key={day.dayKey}
-                    type="button"
-                    onClick={() => setSelectedForecastDay(day.dayKey)}
-                    className={`rounded-lg px-3 py-2 text-left text-sm ${
-                      day.dayKey === selectedForecastDay
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-600"
-                    }`}
-                  >
-                    <span className="block">{day.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {forecastRange === "7d" && (
-            <BestWindowCard
-              bestWindow={selectedForecastDayData?.bestWindow || null}
-              title={
-                selectedForecastDay
-                  ? `Beste tidspunkt ${selectedForecastDayData?.label || "for valgt dag"}`
-                  : "Beste tidspunkt for valgt dag"
-              }
-              emptyMessage="Ingen gyldige timer for valgt dag."
-            />
-          )}
-          <ScoreModelInfo />
-          <WeatherTable hours={displayedForecastHours} />
-        </section>
-      )}
-
-      {activeTab === "routes" && (
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Legg inn startadresse og stopadresse. Vi finner beste tidspunkt for akkurat denne
-              ruten de neste 24 timene og neste 7 dagene, og gir ekstra poeng ved medvind.
+              Avstand ca. {routeAnalysis.distanceKm} km. Kurs {routeAnalysis.headingDeg}°.
             </p>
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <h3 className="text-base font-semibold text-slate-100">Start og stopp</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                Bruk valgt sted som start, og velg stopp fra adressesøket.
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-left text-sm text-slate-100 hover:bg-slate-900 disabled:opacity-60"
-                  onClick={() => setRouteStart(selected)}
-                  disabled={!selected}
-                >
-                  {routeStart ? `Start: ${routeStart.name}` : "Sett start fra valgt sted"}
-                </button>
-                <input
-                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                  placeholder={
-                    selectedArea
-                      ? `Søk stopadresse i ${selectedArea.name}`
-                      : "Velg sted på hovedfanen først"
-                  }
-                  value={addressQuery}
-                  onChange={(event) => {
-                    setAddressQuery(event.target.value);
-                    setAddressError(null);
-                    setRouteEnd(null);
-                    setRouteAnalysis(null);
-                  }}
-                  disabled={!selectedArea}
-                />
-              </div>
-
-              {addressLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
-              {addressError && (
-                <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
-              )}
-              {addressResults.length > 0 && (
-                <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
-                  {addressResults.map((place) => (
-                    <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                      <button
-                        type="button"
-                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
-                        onClick={() => setRouteEnd(place)}
-                      >
-                        {place.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void analyzeRoutes()}
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
-              disabled={!routeStart || !routeEnd || routeLoading || weatherLoading || addressLoading}
-            >
-              Finn beste tidspunkt for ruten
-            </button>
           </div>
 
-          {routeError && (
-            <div className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{routeError}</div>
-          )}
-          {routeAnalysis && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-                <p className="text-sm text-slate-300">
-                  Rute: <strong>{routeAnalysis.start.name}</strong> →{" "}
-                  <strong>{routeAnalysis.end.name}</strong>
-                </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Avstand ca. {routeAnalysis.distanceKm} km, kurs {routeAnalysis.headingDeg}°.
-                </p>
-              </div>
-              <BestWindowCard
-                bestWindow={
-                  analysisRunMs === null
-                    ? null
-                    : buildBestWindowFromHours(routeAnalysis.hours.slice(0, 24), analysisRunMs)
-                }
-                title="Beste tidspunkt neste 24 timer (din rute)"
-                emptyMessage="Ingen tilgjengelige timer i de neste 24 timene."
-                includeDay
-              />
-              <BestWindowCard
-                bestWindow={
-                  analysisRunMs === null
-                    ? null
-                    : buildBestWindowFromHours(routeAnalysis.hours, analysisRunMs)
-                }
-                title="Beste tidspunkt neste 7 dager (din rute)"
-                emptyMessage="Ingen tilgjengelige timer i de neste 7 dagene."
-                includeDay
-              />
+          <BestWindowCard
+            bestWindow={buildBestWindowFromHours(hours24, analysisRunMs)}
+            title="Beste tidspunkt neste 24 timer"
+            emptyMessage="Fant ingen gyldige timer for neste 24 timer."
+            includeDay
+          />
+
+          <BestWindowCard
+            bestWindow={buildBestWindowFromHours(hours7d, analysisRunMs)}
+            title="Beste tidspunkt neste 7 dager"
+            emptyMessage="Fant ingen gyldige timer for neste 7 dager."
+            includeDay
+          />
+
+          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+            <h2 className="text-base font-semibold text-slate-100">Timer for valgt rute</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Score under inkluderer medvind/motvind langs ruten.
+            </p>
+            <div className="mt-4">
+              <WeatherTable hours={hours24} />
             </div>
-          )}
+          </div>
         </section>
       )}
 
-      {selected && (
+      {routeAnalysis && (
         <LocationMap
-          lat={selected.lat}
-          lon={selected.lon}
-          label={selected.name}
-          onMarkerMoved={onMarkerMoved}
-          routeName={routeAnalysis ? `${routeAnalysis.start.name} til ${routeAnalysis.end.name}` : null}
-          routePoints={routeAnalysis?.routePoints || []}
+          lat={routeAnalysis.start.lat}
+          lon={routeAnalysis.start.lon}
+          label={routeAnalysis.start.name}
+          onMarkerMoved={() => {}}
+          routeName="Valgt rute"
+          routePoints={routeAnalysis.routePoints}
         />
       )}
     </main>
