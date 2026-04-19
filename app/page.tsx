@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BestWindow, GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { BestWindow, GeocodeResult, RouteTimeAnalysisResponse, WeatherResponse } from "@/lib/types";
 
 interface ApiError {
   error: string;
@@ -19,9 +19,6 @@ const LocationMap = dynamic(
     ),
     ssr: false
   }
-);
-const RouteAnalysisPanel = dynamic(
-  () => import("@/components/RouteAnalysisPanel").then((module) => module.RouteAnalysisPanel)
 );
 const ScoreModelInfo = dynamic(
   () => import("@/components/ScoreModelInfo").then((module) => module.ScoreModelInfo)
@@ -159,21 +156,25 @@ export default function HomePage() {
   const [addressResults, setAddressResults] = useState<GeocodeResult[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
+  const [stopQuery, setStopQuery] = useState("");
+  const [stopResults, setStopResults] = useState<GeocodeResult[]>([]);
+  const [stopLoading, setStopLoading] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
+  const [selectedStop, setSelectedStop] = useState<GeocodeResult | null>(null);
   const [selected, setSelected] = useState<GeocodeResult | null>(null);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [routeAnalysis, setRouteAnalysis] = useState<RouteAnalysisResponse | null>(null);
+  const [routeAnalysis, setRouteAnalysis] = useState<RouteTimeAnalysisResponse | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [minDistanceKm, setMinDistanceKm] = useState("15");
-  const [maxDistanceKm, setMaxDistanceKm] = useState("35");
   const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
+  const stopCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
+  const deferredStopQuery = useDeferredValue(stopQuery);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
 
@@ -190,7 +191,6 @@ export default function HomePage() {
     setSelected(null);
     setWeather(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
     setRouteError(null);
     setAnalysisRunMs(null);
     setResults([]);
@@ -270,10 +270,6 @@ export default function HomePage() {
   }, [deferredQuery, selectedArea]);
 
   useEffect(() => {
-    if (!selectedArea) {
-      return;
-    }
-
     const trimmedQuery = deferredAddressQuery.trim();
 
     if (trimmedQuery.length < 2) {
@@ -284,7 +280,8 @@ export default function HomePage() {
     }
 
     let active = true;
-    const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${selectedArea.lat.toFixed(4)}::${selectedArea.lon.toFixed(4)}`;
+    const contextPart = selectedArea ? selectedArea.name : "norge";
+    const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${contextPart.toLocaleLowerCase("nb-NO")}`;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
       const cachedResults = addressCacheRef.current.get(cacheKey);
@@ -300,14 +297,14 @@ export default function HomePage() {
       setAddressError(null);
 
       try {
-        const response = await fetch(
-          `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(
-            areaContext
-          )}&nearLat=${selectedArea.lat}&nearLon=${selectedArea.lon}`,
-          {
-            signal: controller.signal
-          }
-        );
+        const url = selectedArea
+          ? `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(
+              areaContext
+            )}&nearLat=${selectedArea.lat}&nearLon=${selectedArea.lon}`
+          : `/api/geocode?q=${encodeURIComponent(trimmedQuery)}`;
+        const response = await fetch(url, {
+          signal: controller.signal
+        });
         const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
 
         if (!response.ok) {
@@ -348,6 +345,77 @@ export default function HomePage() {
     };
   }, [deferredAddressQuery, areaContext, selectedArea]);
 
+
+  useEffect(() => {
+    const trimmedQuery = deferredStopQuery.trim();
+
+    if (trimmedQuery.length < 2) {
+      setStopResults([]);
+      setStopError(null);
+      setStopLoading(false);
+      return;
+    }
+
+    let active = true;
+    const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      const cachedResults = stopCacheRef.current.get(cacheKey);
+
+      if (cachedResults) {
+        setStopResults(cachedResults);
+        setStopLoading(false);
+        setStopError(null);
+        return;
+      }
+
+      setStopLoading(true);
+      setStopError(null);
+
+      try {
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal
+        });
+        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Klarte ikke å søke stoppadresse.");
+        }
+
+        if (!active) {
+          return;
+        }
+
+        const nextResults = payload.results || [];
+        stopCacheRef.current.set(cacheKey, nextResults);
+        setStopResults(nextResults);
+      } catch (caughtError) {
+        if (!active) {
+          return;
+        }
+
+        if (caughtError instanceof Error && caughtError.name === "AbortError") {
+          return;
+        }
+
+        setStopError(
+          caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stopp-søk."
+        );
+        setStopResults([]);
+      } finally {
+        if (active) {
+          setStopLoading(false);
+        }
+      }
+    }, ADDRESS_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [deferredStopQuery]);
+
   const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
     setWeatherLoading(true);
     setError(null);
@@ -355,7 +423,6 @@ export default function HomePage() {
     setSelected(place);
     setWeather(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
     setAnalysisRunMs(null);
 
     try {
@@ -382,56 +449,36 @@ export default function HomePage() {
   }, []);
 
   const analyzeRoutes = useCallback(async (): Promise<void> => {
-    if (!selected) {
-      setRouteError("Velg en startplass før du analyserer ruter.");
-      return;
-    }
-
-    const minKm = Number(minDistanceKm);
-    const maxKm = Number(maxDistanceKm);
-
-    if (!Number.isFinite(minKm) || !Number.isFinite(maxKm) || minKm <= 0 || maxKm <= 0) {
-      setRouteError("Min og maks km må være gyldige positive tall.");
-      return;
-    }
-
-    if (minKm > maxKm) {
-      setRouteError("Min km kan ikke være større enn maks km.");
+    if (!selected || !selectedStop) {
+      setRouteError("Velg både startadresse og stoppadresse før analyse.");
       return;
     }
 
     setRouteLoading(true);
     setRouteError(null);
     setRouteAnalysis(null);
-    setSelectedRouteId(null);
 
     try {
       const response = await fetch(
-        `/api/route-analysis?lat=${selected.lat}&lon=${selected.lon}&label=${encodeURIComponent(
-          selected.name
-        )}&minKm=${minKm}&maxKm=${maxKm}`
+        `/api/route-analysis?startLat=${selected.lat}&startLon=${selected.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selected.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`
       );
-      const payload = (await response.json()) as RouteAnalysisResponse & ApiError;
+      const payload = (await response.json()) as RouteTimeAnalysisResponse & ApiError;
 
       if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å analysere rutene.");
+        throw new Error(payload.error || "Klarte ikke å analysere ruten.");
       }
 
       setRouteAnalysis(payload);
-      setSelectedRouteId(payload.bestRouteId ?? payload.routes[0]?.route.id ?? null);
     } catch (caughtError) {
       setRouteError(
         caughtError instanceof Error ? caughtError.message : "Ukjent feil ved ruteanalyse."
       );
       setRouteAnalysis(null);
-      setSelectedRouteId(null);
     } finally {
       setRouteLoading(false);
     }
-  }, [maxDistanceKm, minDistanceKm, selected]);
+  }, [selected, selectedStop]);
 
-  const selectedRoute =
-    routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
 
   const visibleWeatherHours = useMemo(() => {
     if (!weather || analysisRunMs === null) {
@@ -667,6 +714,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {activeTab === "forecast" && (
       <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
@@ -687,8 +735,7 @@ export default function HomePage() {
                 setSelected(null);
                 setWeather(null);
                 setRouteAnalysis(null);
-                setSelectedRouteId(null);
-                setRouteError(null);
+                            setRouteError(null);
               }
             }}
           />
@@ -750,14 +797,15 @@ export default function HomePage() {
         {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
 
       </section>
+      )}
 
-      {!weather && !weatherLoading && !error && (
+      {!weather && !weatherLoading && !error && activeTab === "forecast" && (
         <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
           Velg et sted for å se værtime-for-time, værscore og dagens beste tidsvindu.
         </section>
       )}
 
-      {weatherLoading && (
+      {weatherLoading && activeTab === "forecast" && (
         <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
       )}
 
@@ -880,118 +928,160 @@ export default function HomePage() {
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
+              Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
+              sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
             </p>
 
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <h3 className="text-base font-semibold text-slate-100">Startadresse (kun ruteanalyse)</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
-              </p>
-
-              <input
-                className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                placeholder={
-                  selectedArea
-                    ? `Søk adresse i ${selectedArea.name}`
-                    : "Velg sted på hovedfanen først"
-                }
-                value={addressQuery}
-                onChange={(event) => {
-                  setAddressQuery(event.target.value);
-                  setAddressError(null);
-                  setSelected(null);
-                  setRouteAnalysis(null);
-                  setSelectedRouteId(null);
-                }}
-                disabled={!selectedArea}
-              />
-
-              {addressLoading && (
-                <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>
-              )}
-
-              {addressError && (
-                <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
-              )}
-
-              {addressResults.length > 0 && (
-                <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
-                  {addressResults.map((place) => (
-                    <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                      <button
-                        type="button"
-                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
-                        onClick={() => void loadWeatherForPlace(place)}
-                      >
-                        {place.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {!addressLoading &&
-                !addressError &&
-                selectedArea &&
-                addressQuery.trim().length >= 2 &&
-                addressResults.length === 0 && (
-                  <p className="mt-3 text-sm text-slate-400">
-                    Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
-                  </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">Startadresse</h3>
+                <input
+                  className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+                  placeholder="Søk startadresse i Norge"
+                  value={addressQuery}
+                  onChange={(event) => {
+                    setAddressQuery(event.target.value);
+                    setAddressError(null);
+                    setSelected(null);
+                    setRouteAnalysis(null);
+                  }}
+                />
+                {addressLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
+                {addressError && (
+                  <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
                 )}
+                {addressResults.length > 0 && (
+                  <ul className="mt-3 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    {addressResults.map((place) => (
+                      <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
+                          onClick={() => {
+                            setSelected(place);
+                            setAddressQuery(place.name);
+                            setAddressResults([]);
+                          }}
+                        >
+                          {place.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                <h3 className="text-base font-semibold text-slate-100">Stoppadresse</h3>
+                <input
+                  className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+                  placeholder="Søk stoppadresse i Norge"
+                  value={stopQuery}
+                  onChange={(event) => {
+                    setStopQuery(event.target.value);
+                    setStopError(null);
+                    setSelectedStop(null);
+                    setRouteAnalysis(null);
+                  }}
+                />
+                {stopLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
+                {stopError && (
+                  <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{stopError}</p>
+                )}
+                {stopResults.length > 0 && (
+                  <ul className="mt-3 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
+                    {stopResults.map((place) => (
+                      <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                        <button
+                          type="button"
+                          className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
+                          onClick={() => {
+                            setSelectedStop(place);
+                            setStopQuery(place.name);
+                            setStopResults([]);
+                          }}
+                        >
+                          {place.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-slate-800/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                <p className="mt-1 text-sm font-medium text-slate-100">
-                  {selected?.name || "Velg adresse først"}
-                </p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Start</p>
+                <p className="mt-1 text-sm font-medium text-slate-100">{selected?.name || "Ikke valgt"}</p>
               </div>
-              <label className="rounded-lg bg-slate-800/60 p-3">
-                <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={minDistanceKm}
-                  onChange={(event) => setMinDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                />
-              </label>
-              <label className="rounded-lg bg-slate-800/60 p-3">
-                <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={maxDistanceKm}
-                  onChange={(event) => setMaxDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                />
-              </label>
+              <div className="rounded-lg bg-slate-800/60 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Stopp</p>
+                <p className="mt-1 text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={() => void analyzeRoutes()}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
-              disabled={!selected || routeLoading || weatherLoading || addressLoading}
+              disabled={!selected || !selectedStop || routeLoading || addressLoading || stopLoading}
             >
-              Analyser ruter
+              Analyser valgt rute
             </button>
           </div>
 
-          {selected && (
-            <RouteAnalysisPanel
-              data={routeAnalysis}
-              loading={routeLoading}
-              error={routeError}
-              selectedRouteId={selectedRouteId}
-              onSelectRoute={setSelectedRouteId}
-              onRefresh={() => void analyzeRoutes()}
-            />
+          {routeError && (
+            <div className="rounded-xl bg-rose-950/40 p-4 text-sm text-rose-300">{routeError}</div>
+          )}
+
+          {routeAnalysis && (
+            <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-slate-800/60 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Distanse tur/retur</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.distanceKm} km</p>
+                </div>
+                <div className="rounded-lg bg-slate-800/60 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">En vei</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.oneWayDistanceKm} km</p>
+                </div>
+                <div className="rounded-lg bg-slate-800/60 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Prøvepunkter</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.sampledPoints.length}</p>
+                </div>
+              </div>
+
+              <BestWindowCard
+                bestWindow={routeAnalysis.bestWindowNext24h}
+                title="Beste tidspunkt neste 24 timer (valgt rute)"
+                emptyMessage="Fant ingen gyldige timer de neste 24 timene."
+                includeDay
+              />
+              <BestWindowCard
+                bestWindow={routeAnalysis.bestWindowNext7d}
+                title="Beste tidspunkt neste 7 dager (valgt rute)"
+                emptyMessage="Fant ingen gyldige timer de neste 7 dagene."
+                includeDay
+              />
+
+              <WeatherTable
+                hours={routeAnalysis.hours.map((hour) => ({
+                  ...hour,
+                  cloudCoverPercent: 0,
+                  symbolCode: undefined,
+                  windFromDirection: undefined,
+                  windGust: undefined,
+                  scoreReasons: [`Medvindskomponent: ${hour.tailwindMs} m/s`],
+                  dataBasis: "forecast_only",
+                  confidence: {
+                    score: 70,
+                    level: "medium",
+                    reason: "Basert på kombinert ruteprognose"
+                  }
+                }))}
+              />
+            </section>
           )}
         </section>
       )}
@@ -1002,8 +1092,8 @@ export default function HomePage() {
           lon={selected.lon}
           label={selected.name}
           onMarkerMoved={onMarkerMoved}
-          routeName={selectedRoute?.shortName || null}
-          routePoints={selectedRoute?.points || []}
+          routeName={routeAnalysis?.route.shortName || null}
+          routePoints={routeAnalysis?.route.points || []}
         />
       )}
     </main>

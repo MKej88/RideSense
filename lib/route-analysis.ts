@@ -6,7 +6,9 @@ import {
   RouteAnalysis,
   RouteAnalysisResponse,
   RoutePoint,
-  RouteSamplePoint
+  RouteSamplePoint,
+  RouteTimeAnalysisResponse,
+  RouteWindHour
 } from "@/lib/types";
 
 interface RouteProfile {
@@ -1098,4 +1100,220 @@ function estimateDistanceKm(start: RoutePoint, end: RoutePoint): number {
 
 function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+
+function getRouteHeadingDegrees(start: RoutePoint, end: RoutePoint): number {
+  return (calculateBearing(start, end) + 360) % 360;
+}
+
+function getTailwindComponentMs(
+  windSpeed: number,
+  windFromDirection: number | undefined,
+  travelHeadingDegrees: number
+): number {
+  if (!Number.isFinite(windSpeed) || !Number.isFinite(windFromDirection)) {
+    return 0;
+  }
+
+  const windTowards = ((windFromDirection as number) + 180) % 360;
+  const diff = ((windTowards - travelHeadingDegrees + 540) % 360) - 180;
+  const radians = (diff * Math.PI) / 180;
+
+  return windSpeed * Math.cos(radians);
+}
+
+function scoreLabelFromScore(score: number): "good" | "ok" | "bad" {
+  if (score >= 75) {
+    return "good";
+  }
+
+  if (score >= 50) {
+    return "ok";
+  }
+
+  return "bad";
+}
+
+function buildRouteWeatherHour(
+  hours: Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
+  sampleIndex: number,
+  routeHeading: number
+): RouteWindHour {
+  const selectedHours = hours.filter((hour) => Boolean(hour));
+  const avgScore = selectedHours.reduce((sum, hour) => sum + hour.score, 0) / selectedHours.length;
+  const avgWind = selectedHours.reduce((sum, hour) => sum + hour.windSpeed, 0) / selectedHours.length;
+  const avgRain =
+    selectedHours.reduce((sum, hour) => sum + hour.precipitationAmount, 0) / selectedHours.length;
+  const avgTemp =
+    selectedHours.reduce((sum, hour) => sum + hour.airTemperature, 0) / selectedHours.length;
+  const avgTailwind =
+    selectedHours.reduce(
+      (sum, hour) =>
+        sum + getTailwindComponentMs(hour.windSpeed, hour.windFromDirection, routeHeading),
+      0
+    ) / selectedHours.length;
+
+  const tailwindBonus = Math.max(-6, Math.min(8, avgTailwind * 2));
+  const finalScore = Math.max(0, Math.min(100, Math.round(avgScore + tailwindBonus)));
+
+  return {
+    time: selectedHours[Math.min(sampleIndex, selectedHours.length - 1)].time,
+    score: finalScore,
+    scoreLabel: scoreLabelFromScore(finalScore),
+    windSpeed: roundToOneDecimal(avgWind),
+    precipitationAmount: roundToOneDecimal(avgRain),
+    airTemperature: roundToOneDecimal(avgTemp),
+    tailwindMs: roundToOneDecimal(avgTailwind)
+  };
+}
+
+function getNextHourTimestamp(nowMs: number): number {
+  const oneHourMs = 60 * 60 * 1000;
+  return Math.floor(nowMs / oneHourMs) * oneHourMs + oneHourMs;
+}
+
+function buildBestWindow(
+  hours: RouteWindHour[],
+  analysisRunMs: number,
+  maxHoursAhead: number
+): { startTime: string; endTime: string; averageScore: number; explanation: string } | null {
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
+  const upperBoundTs = nextHourTs + maxHoursAhead * 60 * 60 * 1000;
+  const relevantHours = hours.filter((hour) => {
+    const ts = new Date(hour.time).getTime();
+    return ts >= nextHourTs && ts <= upperBoundTs;
+  });
+
+  if (relevantHours.length === 0) {
+    return null;
+  }
+
+  const windowSize = Math.min(3, relevantHours.length);
+  let rollingSum = 0;
+  let bestAverage = -1;
+  let bestStart = 0;
+
+  for (let index = 0; index < relevantHours.length; index += 1) {
+    rollingSum += relevantHours[index].score;
+
+    if (index >= windowSize) {
+      rollingSum -= relevantHours[index - windowSize].score;
+    }
+
+    if (index >= windowSize - 1) {
+      const average = rollingSum / windowSize;
+      if (average > bestAverage) {
+        bestAverage = average;
+        bestStart = index - windowSize + 1;
+      }
+    }
+  }
+
+  const bestSegment = relevantHours.slice(bestStart, bestStart + windowSize);
+
+  return {
+    startTime: bestSegment[0].time,
+    endTime: bestSegment[bestSegment.length - 1].time,
+    averageScore: Math.round(bestAverage),
+    explanation: "Beste tidsvindu for valgt rute, inkludert medvind langs traseen."
+  };
+}
+
+async function fetchDirectedRoute(
+  start: RoutePoint,
+  stop: RoutePoint
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  for (const profile of OSRM_PROFILES) {
+    const url =
+      `https://router.project-osrm.org/route/v1/${profile}/` +
+      `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
+      `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+        },
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(OSRM_FETCH_TIMEOUT_MS)
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as OsrmResponse;
+      const bestRoute = payload.routes?.[0];
+
+      if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
+        continue;
+      }
+
+      return {
+        distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
+        points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export async function analyzeUserRoute(
+  start: RoutePoint,
+  stop: RoutePoint,
+  startLabel: string,
+  stopLabel: string
+): Promise<RouteTimeAnalysisResponse> {
+  const oneWayRoute = await fetchDirectedRoute(start, stop);
+
+  if (!oneWayRoute) {
+    throw new Error("Fant ikke kjørbar rute mellom start og stopp.");
+  }
+
+  const roundTripPoints = [...oneWayRoute.points, ...oneWayRoute.points.slice(0, -1).reverse()];
+  const route: Route = {
+    id: "brukervalg",
+    shortName: "Valgt rute",
+    description: "Tur/retur langs vei mellom valgt start og stopp",
+    distanceKm: roundToOneDecimal(oneWayRoute.distanceKm * 2),
+    oneWayDistanceKm: oneWayRoute.distanceKm,
+    isRoundTrip: true,
+    startLabel,
+    endLabel: stopLabel,
+    points: roundTripPoints
+  };
+
+  const sampledPoints = sampleRoutePoints(route, ROUTE_SAMPLE_COUNT);
+  const forecasts = await Promise.all(
+    sampledPoints.map((point, index) =>
+      fetchForecastForLocation(point.lat, point.lon, `Rute punkt ${index + 1}`)
+    )
+  );
+
+  const hourCount = Math.min(...forecasts.map((forecast) => forecast.hours.length));
+
+  if (hourCount === 0) {
+    throw new Error("Fant ikke nok værdata for ruten.");
+  }
+
+  const heading = getRouteHeadingDegrees(start, stop);
+  const routeHours: RouteWindHour[] = Array.from({ length: hourCount }, (_, hourIndex) => {
+    const hourlySamples = forecasts.map((forecast) => forecast.hours[hourIndex]);
+    return buildRouteWeatherHour(hourlySamples, hourIndex, heading);
+  });
+
+  const analysisRunMs = Date.now();
+
+  return {
+    analyzedAt: new Date(analysisRunMs).toISOString(),
+    route,
+    sampledPoints,
+    hours: routeHours,
+    bestWindowNext24h: buildBestWindow(routeHours, analysisRunMs, 24),
+    bestWindowNext7d: buildBestWindow(routeHours, analysisRunMs, 24 * 7)
+  };
 }

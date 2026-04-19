@@ -121,3 +121,23 @@ export interface RouteAnalysisResponse {
   bestRouteId: string | null;
   bestRouteExplanation: string | null;
 }
+
+
+export interface RouteWindHour {
+  time: string;
+  score: number;
+  scoreLabel: ScoreLabel;
+  windSpeed: number;
+  precipitationAmount: number;
+  airTemperature: number;
+  tailwindMs: number;
+}
+
+export interface RouteTimeAnalysisResponse {
+  analyzedAt: string;
+  route: Route;
+  sampledPoints: RouteSamplePoint[];
+  hours: RouteWindHour[];
+  bestWindowNext24h: BestWindow | null;
+  bestWindowNext7d: BestWindow | null;
+}
