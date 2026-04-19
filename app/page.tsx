@@ -100,9 +100,16 @@ function formatUpdatedAt(time: string): string {
   });
 }
 
+function getNextHourTimestamp(nowMs: number): number {
+  const nextHour = new Date(nowMs);
+  nextHour.setMinutes(0, 0, 0);
+  nextHour.setHours(nextHour.getHours() + 1);
+  return nextHour.getTime();
+}
+
 function buildBestWindowFromHours(hours: WeatherResponse["hours"]): BestWindow | null {
-  const now = Date.now();
-  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() > now);
+  const nextHourTs = getNextHourTimestamp(Date.now());
+  const futureHours = hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
 
   if (futureHours.length === 0) {
     return null;
@@ -425,10 +432,10 @@ export default function HomePage() {
       return [];
     }
 
-    const now = Date.now();
+    const nextHourTs = getNextHourTimestamp(Date.now());
 
     if (forecastRange === "7d") {
-      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= now);
+      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= nextHourTs);
       const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
       const allowedDays = new Set(dayKeys.slice(0, 7));
 
@@ -438,7 +445,7 @@ export default function HomePage() {
     }
 
     const nextDayHours = weather.hours
-      .filter((hour) => new Date(hour.time).getTime() >= now)
+      .filter((hour) => new Date(hour.time).getTime() >= nextHourTs)
       .slice(0, 24);
 
     return nextDayHours.filter((hour) => isCyclingHour(hour.time));
