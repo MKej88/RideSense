@@ -72,9 +72,38 @@ function formatSymbol(symbolCode?: string): string {
     .join(" ");
 }
 
-function getSymbolIconUrl(symbolCode?: string): string | null {
-  const symbol = (symbolCode || "unknown").toLowerCase();
-  return `/api/weather-symbol?code=${encodeURIComponent(symbol)}`;
+function getSymbolEmoji(symbolCode?: string): string {
+  const symbol = (symbolCode || "").toLowerCase();
+
+  if (symbol.includes("thunder")) {
+    return "⛈️";
+  }
+
+  if (symbol.includes("snow")) {
+    return "❄️";
+  }
+
+  if (symbol.includes("rain") || symbol.includes("showers")) {
+    return "🌧️";
+  }
+
+  if (symbol.includes("fog")) {
+    return "🌫️";
+  }
+
+  if (symbol.includes("partlycloudy") || symbol.includes("fair")) {
+    return "⛅";
+  }
+
+  if (symbol.includes("cloudy")) {
+    return "☁️";
+  }
+
+  if (symbol.includes("clearsky")) {
+    return symbol.includes("night") ? "🌙" : "☀️";
+  }
+
+  return "🌤️";
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
@@ -96,7 +125,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
         </thead>
         <tbody>
           {hours.map((hour) => {
-            const symbolIconUrl = getSymbolIconUrl(hour.symbolCode);
+            const symbolEmoji = getSymbolEmoji(hour.symbolCode);
 
             return (
               <tr key={hour.time} className="border-t border-slate-800">
@@ -105,24 +134,13 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
                 <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                 <td className="px-4 py-3">
-                  {symbolIconUrl ? (
-                    <div className="flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={symbolIconUrl}
-                        alt={formatSymbol(hour.symbolCode)}
-                        className="h-7 w-7"
-                        width={28}
-                        height={28}
-                        loading="lazy"
-                        onError={(event) => {
-                          event.currentTarget.src = "/weather-symbols/unknown.svg";
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    "-"
-                  )}
+                  <div
+                    className="flex items-center justify-center text-2xl"
+                    title={formatSymbol(hour.symbolCode)}
+                    aria-label={formatSymbol(hour.symbolCode)}
+                  >
+                    {symbolEmoji}
+                  </div>
                 </td>
                 <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
                 <td className="px-4 py-3">
