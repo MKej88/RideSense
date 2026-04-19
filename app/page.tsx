@@ -340,7 +340,12 @@ export default function HomePage() {
     }
 
     if (forecastRange === "7d") {
-      return weather.hours;
+      const now = Date.now();
+      const futureHours = weather.hours.filter((hour) => new Date(hour.time).getTime() >= now);
+      const dayKeys = Array.from(new Set(futureHours.map((hour) => getOsloDayKey(hour.time))));
+      const allowedDays = new Set(dayKeys.slice(0, 7));
+
+      return futureHours.filter((hour) => allowedDays.has(getOsloDayKey(hour.time)));
     }
 
     const now = Date.now();
@@ -452,7 +457,7 @@ export default function HomePage() {
       <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
         <h1 className="text-3xl font-bold">RideSense</h1>
         <p className="mt-2 text-sm text-sky-50">
-          Legg inn sted og startadresse for å få tydelig værscore og beste sykkeltidspunkt.
+          Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
         </p>
 
         <div className="mt-5 inline-flex rounded-xl bg-white/20 p-1">
@@ -595,6 +600,26 @@ export default function HomePage() {
                 Neste 7 dager
               </button>
             </div>
+
+            <div className="mt-4">
+              <BestWindowCard
+                bestWindow={
+                  forecastRange === "24h" ? weather.bestWindowToday : weather.bestWindowNext7Days
+                }
+                title={
+                  forecastRange === "24h"
+                    ? "Beste tidspunkt i dag"
+                    : "Beste tidspunkt neste 7 dager"
+                }
+                emptyMessage={
+                  forecastRange === "24h"
+                    ? "Ingen timer igjen i dag å evaluere."
+                    : "Fant ikke tilgjengelige timer i de neste 7 dagene."
+                }
+                includeDay={forecastRange === "7d"}
+              />
+            </div>
+
             <p className="mt-2 text-sm text-slate-600">
               {forecastRange === "24h"
                 ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
@@ -614,21 +639,6 @@ export default function HomePage() {
                   : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
             </p>
           </div>
-
-          <BestWindowCard
-            bestWindow={forecastRange === "24h" ? weather.bestWindowToday : weather.bestWindowNext7Days}
-            title={
-              forecastRange === "24h"
-                ? "Beste tidspunkt i dag"
-                : "Beste tidspunkt neste 7 dager"
-            }
-            emptyMessage={
-              forecastRange === "24h"
-                ? "Ingen timer igjen i dag å evaluere."
-                : "Fant ikke tilgjengelige timer i de neste 7 dagene."
-            }
-            includeDay={forecastRange === "7d"}
-          />
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
