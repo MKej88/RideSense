@@ -511,6 +511,16 @@ export default function HomePage() {
     return buildBestWindowFromHours(visibleWeatherHours);
   }, [forecastRange, visibleWeatherHours]);
 
+  const includeDayInBestWindow24h = useMemo(() => {
+    if (!visibleBestWindow24h) {
+      return false;
+    }
+
+    const todayKey = getOsloDayKey(new Date().toISOString());
+    const startDayKey = getOsloDayKey(visibleBestWindow24h.startTime);
+    return todayKey !== startDayKey;
+  }, [visibleBestWindow24h]);
+
   const visibleBestWindow7d = useMemo(() => {
     if (forecastRange !== "7d") {
       return null;
@@ -774,8 +784,9 @@ export default function HomePage() {
               <div className="mt-4">
                 <BestWindowCard
                   bestWindow={visibleBestWindow24h}
-                  title="Beste tidspunkt i dag"
-                  emptyMessage="Ingen timer igjen i dag å evaluere."
+                  title="Beste tidspunkt neste 24 timer"
+                  emptyMessage="Ingen tilgjengelige timer i de neste 24 timene."
+                  includeDay={includeDayInBestWindow24h}
                 />
               </div>
             )}
