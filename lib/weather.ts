@@ -45,6 +45,29 @@ function resolveWindGust(
   return undefined;
 }
 
+function resolvePrecipitationAmount(
+  next1hDetails: Record<string, unknown> | undefined,
+  next6hDetails: Record<string, unknown> | undefined,
+  next12hDetails: Record<string, unknown> | undefined
+): number {
+  const next1hAmount = asFiniteNumber(next1hDetails?.precipitation_amount);
+  if (next1hAmount !== undefined) {
+    return Math.max(0, next1hAmount);
+  }
+
+  const next6hAmount = asFiniteNumber(next6hDetails?.precipitation_amount);
+  if (next6hAmount !== undefined) {
+    return Math.max(0, next6hAmount / 6);
+  }
+
+  const next12hAmount = asFiniteNumber(next12hDetails?.precipitation_amount);
+  if (next12hAmount !== undefined) {
+    return Math.max(0, next12hAmount / 12);
+  }
+
+  return 0;
+}
+
 function shouldUseObservation(hourTime: string, observedAt: string): boolean {
   const diffHours =
     Math.abs(new Date(hourTime).getTime() - new Date(observedAt).getTime()) /
@@ -95,7 +118,7 @@ export async function fetchForecastForLocation(
     return {
       time: entry.time,
       airTemperature: details?.air_temperature ?? 0,
-      precipitationAmount: next1h?.precipitation_amount ?? 0,
+      precipitationAmount: resolvePrecipitationAmount(next1h, next6h, next12h),
       windSpeed: details?.wind_speed ?? 0,
       windFromDirection: details?.wind_from_direction,
       windGust: resolveWindGust(details, next1h, next6h, next12h)
