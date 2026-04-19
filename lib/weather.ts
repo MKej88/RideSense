@@ -68,6 +68,23 @@ function resolvePrecipitationAmount(
   return 0;
 }
 
+function resolveSymbolCode(
+  next1hSummary: Record<string, unknown> | undefined,
+  next6hSummary: Record<string, unknown> | undefined,
+  next12hSummary: Record<string, unknown> | undefined
+): string | undefined {
+  const symbolCandidates = [next1hSummary, next6hSummary, next12hSummary];
+
+  for (const summary of symbolCandidates) {
+    const symbolCode = summary?.symbol_code;
+    if (typeof symbolCode === "string" && symbolCode.trim().length > 0) {
+      return symbolCode;
+    }
+  }
+
+  return undefined;
+}
+
 function shouldUseObservation(hourTime: string, observedAt: string): boolean {
   const diffHours =
     Math.abs(new Date(hourTime).getTime() - new Date(observedAt).getTime()) /
@@ -111,18 +128,26 @@ export async function fetchForecastForLocation(
   const observation = await fetchNearestStationObservation(lat, lon);
   const hoursRaw: WeatherHourRaw[] = series.slice(0, FORECAST_HOURS).map((entry: any) => {
     const details = entry?.data?.instant?.details;
-    const next1h = entry?.data?.next_1_hours?.details;
-    const next6h = entry?.data?.next_6_hours?.details;
-    const next12h = entry?.data?.next_12_hours?.details;
+    const next1hDetails = entry?.data?.next_1_hours?.details;
+    const next6hDetails = entry?.data?.next_6_hours?.details;
+    const next12hDetails = entry?.data?.next_12_hours?.details;
+    const next1hSummary = entry?.data?.next_1_hours?.summary;
+    const next6hSummary = entry?.data?.next_6_hours?.summary;
+    const next12hSummary = entry?.data?.next_12_hours?.summary;
 
     return {
       time: entry.time,
       airTemperature: details?.air_temperature ?? 0,
-      precipitationAmount: resolvePrecipitationAmount(next1h, next6h, next12h),
+      precipitationAmount: resolvePrecipitationAmount(
+        next1hDetails,
+        next6hDetails,
+        next12hDetails
+      ),
       windSpeed: details?.wind_speed ?? 0,
       cloudCoverPercent: Math.min(100, Math.max(0, details?.cloud_area_fraction ?? 100)),
+      symbolCode: resolveSymbolCode(next1hSummary, next6hSummary, next12hSummary),
       windFromDirection: details?.wind_from_direction,
-      windGust: resolveWindGust(details, next1h, next6h, next12h)
+      windGust: resolveWindGust(details, next1hDetails, next6hDetails, next12hDetails)
     };
   });
 

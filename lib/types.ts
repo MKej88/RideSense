@@ -12,6 +12,7 @@ export interface WeatherHourRaw {
   precipitationAmount: number;
   windSpeed: number;
   cloudCoverPercent: number;
+  symbolCode?: string;
   windFromDirection?: number;
   windGust?: number;
 }

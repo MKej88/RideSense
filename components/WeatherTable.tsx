@@ -61,6 +61,14 @@ function formatWindDescription(windSpeed: number, direction?: number): string {
   return `Sterk vind fra ${directionText}`;
 }
 
+function formatSymbol(symbolCode?: string): string {
+  if (!symbolCode) {
+    return "-";
+  }
+
+  return symbolCode.replaceAll("_", " ");
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
@@ -70,6 +78,8 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             <th className="px-4 py-3">Tid</th>
             <th className="px-4 py-3">Temp</th>
             <th className="px-4 py-3">Nedbør</th>
+            <th className="px-4 py-3">Skydekke</th>
+            <th className="px-4 py-3">Symbol</th>
             <th className="px-4 py-3">Vind</th>
             <th className="px-4 py-3">Vindkast</th>
             <th className="px-4 py-3">Vindretning</th>
@@ -82,6 +92,8 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
               <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
               <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
+              <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
+              <td className="px-4 py-3 capitalize">{formatSymbol(hour.symbolCode)}</td>
               <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
               <td className="px-4 py-3">
                 {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
