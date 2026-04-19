@@ -67,23 +67,6 @@ function isCyclingHour(time: string): boolean {
   return getOsloHour(time) >= 6;
 }
 
-function formatTimeRange(startTime: string, endTime: string): string {
-  const start = new Date(startTime).toLocaleTimeString("nb-NO", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Oslo"
-  });
-  const end = new Date(endTime).toLocaleTimeString("nb-NO", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Oslo"
-  });
-
-  return `${start}–${end}`;
-}
-
 function formatUpdatedAt(time: string): string {
   return new Date(time).toLocaleString("nb-NO", {
     day: "2-digit",
@@ -476,6 +459,11 @@ export default function HomePage() {
     return selectedDay?.hours || [];
   }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
 
+  const selectedForecastDayData = useMemo(
+    () => forecastDays.find((day) => day.dayKey === selectedForecastDay) || null,
+    [forecastDays, selectedForecastDay]
+  );
+
   const visibleBestWindow24h = useMemo(() => {
     if (forecastRange !== "24h") {
       return null;
@@ -568,9 +556,6 @@ export default function HomePage() {
 
       <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Søk etter område først, deretter startadresse. Så får du resultat direkte.
-        </p>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
           <input
@@ -681,33 +666,42 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="mt-4">
-              <BestWindowCard
-                bestWindow={forecastRange === "24h" ? visibleBestWindow24h : weather.bestWindowNext7Days}
-                title={
-                  forecastRange === "24h"
-                    ? "Beste tidspunkt i dag"
-                    : "Beste tidspunkt neste 7 dager"
-                }
-                emptyMessage={
-                  forecastRange === "24h"
-                    ? "Ingen timer igjen i dag å evaluere."
-                    : "Fant ikke tilgjengelige timer i de neste 7 dagene."
-                }
-                includeDay={forecastRange === "7d"}
-              />
-            </div>
+            {forecastRange === "24h" && (
+              <div className="mt-4">
+                <BestWindowCard
+                  bestWindow={visibleBestWindow24h}
+                  title="Beste tidspunkt i dag"
+                  emptyMessage="Ingen timer igjen i dag å evaluere."
+                />
+              </div>
+            )}
 
             <p className="mt-2 text-sm text-slate-400">
               {forecastRange === "24h"
                 ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
                 : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
             </p>
-            {updatedWeatherAt && (
-              <p className="mt-2 text-sm text-slate-300">
-                Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
-              </p>
-            )}
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {updatedWeatherAt && (
+                <p className="text-sm text-slate-300">
+                  Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const placeToRefresh = selected || selectedArea;
+                  if (!placeToRefresh) {
+                    return;
+                  }
+                  void loadWeatherForPlace(placeToRefresh);
+                }}
+                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                disabled={weatherLoading || (!selected && !selectedArea)}
+              >
+                Oppdater værdata
+              </button>
+            </div>
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
@@ -725,15 +719,21 @@ export default function HomePage() {
                     }`}
                   >
                     <span className="block">{day.label}</span>
-                    <span className={`mt-1 block text-xs ${day.dayKey === selectedForecastDay ? "text-slate-200" : "text-slate-400"}`}>
-                      {day.bestWindow
-                        ? `Best: ${formatTimeRange(day.bestWindow.startTime, day.bestWindow.endTime)}`
-                        : "Ingen gyldige timer"}
-                    </span>
                   </button>
                 ))}
               </div>
             </div>
+          )}
+          {forecastRange === "7d" && (
+            <BestWindowCard
+              bestWindow={selectedForecastDayData?.bestWindow || null}
+              title={
+                selectedForecastDay
+                  ? `Beste tidspunkt ${selectedForecastDayData?.label || "for valgt dag"}`
+                  : "Beste tidspunkt for valgt dag"
+              }
+              emptyMessage="Ingen gyldige timer for valgt dag."
+            />
           )}
           <WeatherTable hours={displayedForecastHours} />
         </section>
