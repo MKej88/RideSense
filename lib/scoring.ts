@@ -321,45 +321,28 @@ export function findBestWindowToday(hours: ScoredWeatherHour[]): {
   explanation: string;
 } | null {
   const osloToday = formatDateInTimeZone(new Date(), "Europe/Oslo");
-  const now = Date.now();
-  const todayHours = hours.filter((hour) => {
-    const hourDate = new Date(hour.time);
+
+  return findBestWindowWithinPeriod(hours, (hourDate, now) => {
     const isTodayInOslo =
       formatDateInTimeZone(hourDate, "Europe/Oslo") === osloToday;
-    const isFutureHour = hourDate.getTime() >= now;
+    const isFutureHour = hourDate.getTime() >= now.getTime();
 
     return isTodayInOslo && isFutureHour;
   });
+}
 
-  if (todayHours.length === 0) {
-    return null;
-  }
+export function findBestWindowNext7Days(hours: ScoredWeatherHour[]): {
+  startTime: string;
+  endTime: string;
+  averageScore: number;
+  explanation: string;
+} | null {
+  return findBestWindowWithinPeriod(hours, (hourDate, now) => {
+    const msInDay = 24 * 60 * 60 * 1000;
+    const diffMs = hourDate.getTime() - now.getTime();
 
-  const windowSize = Math.min(3, todayHours.length);
-  let bestStartIndex = 0;
-  let bestAverage = -1;
-
-  for (let index = 0; index <= todayHours.length - windowSize; index += 1) {
-    const segment = todayHours.slice(index, index + windowSize);
-    const average =
-      segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
-
-    if (average > bestAverage) {
-      bestAverage = average;
-      bestStartIndex = index;
-    }
-  }
-
-  const bestSegment = todayHours.slice(bestStartIndex, bestStartIndex + windowSize);
-  const first = bestSegment[0];
-  const last = bestSegment[bestSegment.length - 1];
-
-  return {
-    startTime: first.time,
-    endTime: last.time,
-    averageScore: Math.round(bestAverage),
-    explanation: summarizeWindow(bestSegment)
-  };
+    return diffMs >= 0 && diffMs <= 7 * msInDay;
+  });
 }
 
 function formatDateInTimeZone(date: Date, timeZone: string): string {
@@ -369,6 +352,52 @@ function formatDateInTimeZone(date: Date, timeZone: string): string {
     month: "2-digit",
     day: "2-digit"
   }).format(date);
+}
+
+function findBestWindowWithinPeriod(
+  hours: ScoredWeatherHour[],
+  predicate: (hourDate: Date, now: Date) => boolean
+): {
+  startTime: string;
+  endTime: string;
+  averageScore: number;
+  explanation: string;
+} | null {
+  const now = new Date();
+  const candidateHours = hours.filter((hour) => {
+    const hourDate = new Date(hour.time);
+    return predicate(hourDate, now);
+  });
+
+  if (candidateHours.length === 0) {
+    return null;
+  }
+
+  const windowSize = Math.min(3, candidateHours.length);
+  let bestStartIndex = 0;
+  let bestAverage = -1;
+
+  for (let index = 0; index <= candidateHours.length - windowSize; index += 1) {
+    const segment = candidateHours.slice(index, index + windowSize);
+    const average =
+      segment.reduce((sum, hour) => sum + hour.score, 0) / segment.length;
+
+    if (average > bestAverage) {
+      bestAverage = average;
+      bestStartIndex = index;
+    }
+  }
+
+  const bestSegment = candidateHours.slice(bestStartIndex, bestStartIndex + windowSize);
+  const first = bestSegment[0];
+  const last = bestSegment[bestSegment.length - 1];
+
+  return {
+    startTime: first.time,
+    endTime: last.time,
+    averageScore: Math.round(bestAverage),
+    explanation: summarizeWindow(bestSegment)
+  };
 }
 
 function summarizeWindow(hours: ScoredWeatherHour[]): string {

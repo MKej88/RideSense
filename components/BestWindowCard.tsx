@@ -7,19 +7,25 @@ function formatTime(time: string): string {
   });
 }
 
-export function BestWindowCard({ bestWindow }: { bestWindow: BestWindow | null }) {
+interface BestWindowCardProps {
+  bestWindow: BestWindow | null;
+  title: string;
+  emptyMessage: string;
+}
+
+export function BestWindowCard({ bestWindow, title, emptyMessage }: BestWindowCardProps) {
   if (!bestWindow) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Beste tidspunkt i dag</h2>
-        <p className="mt-2 text-sm text-slate-600">Ingen timer igjen i dag å evaluere.</p>
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="mt-2 text-sm text-slate-600">{emptyMessage}</p>
       </div>
     );
   }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Beste tidspunkt i dag</h2>
+      <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-2 text-2xl font-bold text-slate-900">
         {formatTime(bestWindow.startTime)}–{formatTime(bestWindow.endTime)}
       </p>

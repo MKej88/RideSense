@@ -1,10 +1,11 @@
-import { calculateBikeScore, findBestWindowToday } from "@/lib/scoring";
+import { calculateBikeScore, findBestWindowNext7Days, findBestWindowToday } from "@/lib/scoring";
 import { fetchNearestStationObservation } from "@/lib/station-observations";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
 const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
 const MET_FETCH_TIMEOUT_MS = 4000;
 const OBSERVATION_MAX_AGE_HOURS = 2;
+const FORECAST_HOURS = 24 * 7;
 
 function asFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -85,7 +86,7 @@ export async function fetchForecastForLocation(
   }
 
   const observation = await fetchNearestStationObservation(lat, lon);
-  const hoursRaw: WeatherHourRaw[] = series.slice(0, 24).map((entry: any) => {
+  const hoursRaw: WeatherHourRaw[] = series.slice(0, FORECAST_HOURS).map((entry: any) => {
     const details = entry?.data?.instant?.details;
     const next1h = entry?.data?.next_1_hours?.details;
     const next6h = entry?.data?.next_6_hours?.details;
@@ -119,6 +120,7 @@ export async function fetchForecastForLocation(
     timezone: "Europe/Oslo",
     hours: scoredHours,
     bestWindowToday: findBestWindowToday(scoredHours),
+    bestWindowNext7Days: findBestWindowNext7Days(scoredHours),
     dataBasis: hasObservation ? "forecast_plus_observation" : "forecast_only",
     observationSummary: {
       used: hasObservation,

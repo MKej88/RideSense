@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormEvent, useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
 
 interface ApiError {
@@ -45,6 +45,8 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
 }
 
 export default function HomePage() {
+  const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
+  const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
@@ -322,6 +324,33 @@ export default function HomePage() {
   const selectedRoute =
     routeAnalysis?.routes.find((route) => route.route.id === selectedRouteId)?.route ?? null;
 
+  const visibleWeatherHours = useMemo(() => {
+    if (!weather) {
+      return [];
+    }
+
+    if (forecastRange === "7d") {
+      return weather.hours;
+    }
+
+    const now = Date.now();
+    const nextDayHours = weather.hours
+      .filter((hour) => new Date(hour.time).getTime() >= now)
+      .slice(0, 24);
+
+    return nextDayHours.filter((hour) => {
+      const localHour = Number(
+        new Date(hour.time).toLocaleTimeString("nb-NO", {
+          hour: "2-digit",
+          hour12: false,
+          timeZone: "Europe/Oslo"
+        })
+      );
+
+      return localHour >= 6;
+    });
+  }, [forecastRange, weather]);
+
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
       const movedPlace: GeocodeResult = {
@@ -363,11 +392,43 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-xl bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">RideSense</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Finn beste tidspunkt for landeveissykling basert på vær, vind og nedbør.
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
+      <section className="rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-500 to-emerald-500 p-6 text-white shadow-lg">
+        <h1 className="text-3xl font-bold">RideSense</h1>
+        <p className="mt-2 text-sm text-sky-50">
+          Legg inn sted og startadresse for å få tydelig værscore og beste sykkeltidspunkt.
+        </p>
+
+        <div className="mt-5 inline-flex rounded-xl bg-white/20 p-1">
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              activeTab === "forecast"
+                ? "bg-white text-slate-900"
+                : "text-white hover:bg-white/20"
+            }`}
+            onClick={() => setActiveTab("forecast")}
+          >
+            Vær og tidspunkt
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              activeTab === "routes"
+                ? "bg-white text-slate-900"
+                : "text-white hover:bg-white/20"
+            }`}
+            onClick={() => setActiveTab("routes")}
+          >
+            Ruteanalyse
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-lg font-semibold text-slate-900">1) Velg sted</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Søk etter område først, deretter startadresse. Så får du resultat direkte.
         </p>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -496,52 +557,6 @@ export default function HomePage() {
 
         {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <h2 className="text-base font-semibold text-slate-900">Ruteanalyse</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Velg startplass, angi min og maks km, og kjør analyse. Distanse regnes som tur/retur.
-          </p>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-white p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {selected?.name || "Velg adresse først"}
-              </p>
-            </div>
-            <label className="rounded-lg bg-white p-3">
-              <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={minDistanceKm}
-                onChange={(event) => setMinDistanceKm(event.target.value)}
-                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              />
-            </label>
-            <label className="rounded-lg bg-white p-3">
-              <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={maxDistanceKm}
-                onChange={(event) => setMaxDistanceKm(event.target.value)}
-                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              />
-            </label>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void analyzeRoutes()}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
-            disabled={!selected || routeLoading || weatherLoading || addressLoading}
-          >
-            Analyser ruter
-          </button>
-        </div>
       </section>
 
       {!weather && !weatherLoading && !error && (
@@ -565,22 +580,39 @@ export default function HomePage() {
         />
       )}
 
-      {selected && (
-        <RouteAnalysisPanel
-          data={routeAnalysis}
-          loading={routeLoading}
-          error={routeError}
-          selectedRouteId={selectedRouteId}
-          onSelectRoute={setSelectedRouteId}
-          onRefresh={() => void analyzeRoutes()}
-        />
-      )}
-
-      {weather && (
+      {weather && activeTab === "forecast" && (
         <section className="space-y-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
-            <p className="text-sm text-slate-600">Neste 24 timer</p>
+            <div className="mt-3 inline-flex rounded-lg bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setForecastRange("24h")}
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  forecastRange === "24h"
+                    ? "bg-white font-medium text-slate-900 shadow-sm"
+                    : "text-slate-700"
+                }`}
+              >
+                Neste 24 timer
+              </button>
+              <button
+                type="button"
+                onClick={() => setForecastRange("7d")}
+                className={`rounded-md px-3 py-1.5 text-sm ${
+                  forecastRange === "7d"
+                    ? "bg-white font-medium text-slate-900 shadow-sm"
+                    : "text-slate-700"
+                }`}
+              >
+                Neste 7 dager
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              {forecastRange === "24h"
+                ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
+                : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
+            </p>
             <p className="mt-2 text-sm text-slate-700">
               Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
                 ? "prognose + observasjon"
@@ -595,8 +627,83 @@ export default function HomePage() {
                   : "Ingen tilgjengelige stasjonsobservasjoner akkurat nå. Appen bruker kun prognose."}
             </p>
           </div>
-          <BestWindowCard bestWindow={weather.bestWindowToday} />
-          <WeatherTable hours={weather.hours} />
+
+          <BestWindowCard
+            bestWindow={forecastRange === "24h" ? weather.bestWindowToday : weather.bestWindowNext7Days}
+            title={
+              forecastRange === "24h"
+                ? "Beste tidspunkt i dag"
+                : "Beste tidspunkt neste 7 dager"
+            }
+            emptyMessage={
+              forecastRange === "24h"
+                ? "Ingen timer igjen i dag å evaluere."
+                : "Fant ikke tilgjengelige timer i de neste 7 dagene."
+            }
+          />
+          <WeatherTable hours={visibleWeatherHours} />
+        </section>
+      )}
+
+      {activeTab === "routes" && (
+        <section className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Ruteanalyse</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
+            </p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {selected?.name || "Velg adresse først"}
+                </p>
+              </div>
+              <label className="rounded-lg bg-slate-50 p-3">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={minDistanceKm}
+                  onChange={(event) => setMinDistanceKm(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </label>
+              <label className="rounded-lg bg-slate-50 p-3">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={maxDistanceKm}
+                  onChange={(event) => setMaxDistanceKm(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void analyzeRoutes()}
+              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
+              disabled={!selected || routeLoading || weatherLoading || addressLoading}
+            >
+              Analyser ruter
+            </button>
+          </div>
+
+          {selected && (
+            <RouteAnalysisPanel
+              data={routeAnalysis}
+              loading={routeLoading}
+              error={routeError}
+              selectedRouteId={selectedRouteId}
+              onSelectRoute={setSelectedRouteId}
+              onRefresh={() => void analyzeRoutes()}
+            />
+          )}
         </section>
       )}
     </main>
