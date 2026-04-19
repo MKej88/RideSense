@@ -1,5 +1,7 @@
 import { BestWindow } from "@/lib/types";
 
+const TIME_RANGE_SEPARATOR = " - ";
+
 function formatTime(time: string): string {
   return new Date(time).toLocaleTimeString("nb-NO", {
     hour12: false,
@@ -30,7 +32,7 @@ function formatTimeOnly(time: string): string {
 
 function formatBestWindowLabel(startTime: string, endTime: string, includeDay: boolean): string {
   if (!includeDay) {
-    return `${formatTime(startTime)}–${formatTime(endTime)}`;
+    return `${formatTime(startTime)}${TIME_RANGE_SEPARATOR}${formatTime(endTime)}`;
   }
 
   const startDay = new Date(startTime).toLocaleDateString("en-CA", {
@@ -47,10 +49,10 @@ function formatBestWindowLabel(startTime: string, endTime: string, includeDay: b
   });
 
   if (startDay === endDay) {
-    return `${formatDayAndTime(startTime)}–${formatTimeOnly(endTime)}`;
+    return `${formatDayAndTime(startTime)}${TIME_RANGE_SEPARATOR}${formatTimeOnly(endTime)}`;
   }
 
-  return `${formatDayAndTime(startTime)}–${formatDayAndTime(endTime)}`;
+  return `${formatDayAndTime(startTime)}${TIME_RANGE_SEPARATOR}${formatDayAndTime(endTime)}`;
 }
 
 interface BestWindowCardProps {
