@@ -349,7 +349,6 @@ export default function HomePage() {
   }, [deferredAddressQuery, areaContext, selectedArea]);
 
   const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
-    const startedAtMs = Date.now();
     setWeatherLoading(true);
     setError(null);
     setRouteError(null);
@@ -357,7 +356,7 @@ export default function HomePage() {
     setWeather(null);
     setRouteAnalysis(null);
     setSelectedRouteId(null);
-    setAnalysisRunMs(startedAtMs);
+    setAnalysisRunMs(null);
 
     try {
       const response = await fetch(
@@ -369,6 +368,7 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å hente værdata.");
       }
 
+      setAnalysisRunMs(Date.now());
       setWeather(payload);
       setResults([]);
       setAddressResults([]);
