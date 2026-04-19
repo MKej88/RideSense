@@ -523,31 +523,54 @@ export default function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
-      <section className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-slate-950 p-6 shadow-[0_20px_60px_-30px_rgba(6,182,212,0.45)]">
+      <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.08)_1px,transparent_1px)] bg-[size:32px_32px]" />
-          <div className="absolute -left-16 top-[-120px] h-56 w-56 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="absolute -right-20 bottom-[-120px] h-64 w-64 rounded-full bg-teal-400/20 blur-3xl" />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-900/40" />
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(45,212,191,0.28),rgba(2,11,35,0)_38%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_85%,rgba(14,165,233,0.22),rgba(2,11,35,0)_45%)]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#020b23]/95 via-[#031533]/78 to-[#021021]/58" />
+          <svg viewBox="0 0 1000 320" className="absolute inset-x-0 bottom-0 h-[72%] w-full opacity-90" aria-hidden="true">
+            <defs>
+              <linearGradient id="heroPathGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0" />
+                <stop offset="48%" stopColor="#22d3ee" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.28" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M-40 250 C140 225, 220 150, 360 176 S610 260, 1030 72"
+              fill="none"
+              stroke="url(#heroPathGlow)"
+              strokeWidth="6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M-80 275 C140 244, 300 298, 500 262 S810 190, 1060 162"
+              fill="none"
+              stroke="rgba(34,211,238,0.28)"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
 
-        <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/60 px-3 py-1 text-xs font-medium text-cyan-200 backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/55 px-3 py-1 text-xs font-medium text-cyan-100 backdrop-blur-md">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
               Smart sykkelprognose
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white md:text-4xl">RideSense</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-200 md:text-base">
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">RideSense</h1>
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-100/95 md:text-xl">
               Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
             </p>
 
-            <div className="mt-5 inline-flex rounded-xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur">
+            <div className="mt-6 inline-flex rounded-2xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur-md">
               <button
                 type="button"
                 className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                   activeTab === "forecast"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+                    ? "bg-[#061739] text-cyan-100 ring-1 ring-cyan-300/45 shadow-[0_6px_18px_-10px_rgba(34,211,238,0.8)]"
                     : "text-slate-200 hover:bg-cyan-400/10"
                 }`}
                 onClick={() => setActiveTab("forecast")}
@@ -558,7 +581,7 @@ export default function HomePage() {
                 type="button"
                 className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                   activeTab === "routes"
-                    ? "bg-cyan-400/20 text-cyan-100 ring-1 ring-cyan-300/40"
+                    ? "bg-gradient-to-r from-cyan-500/95 to-teal-400/90 text-slate-950 shadow-[0_8px_22px_-12px_rgba(45,212,191,0.8)]"
                     : "text-slate-200 hover:bg-cyan-400/10"
                 }`}
                 onClick={() => setActiveTab("routes")}
@@ -568,38 +591,39 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative hidden h-44 rounded-2xl border border-cyan-300/20 bg-slate-900/45 p-4 backdrop-blur lg:block">
-            <svg viewBox="0 0 320 180" className="h-full w-full" aria-hidden="true">
-              <defs>
-                <linearGradient id="routeGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.15" />
-                  <stop offset="50%" stopColor="#2dd4bf" stopOpacity="0.9" />
-                  <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.2" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M15 142 C60 98, 96 82, 132 94 S206 134, 304 44"
-                fill="none"
-                stroke="url(#routeGlow)"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              <circle cx="15" cy="142" r="5" fill="#22d3ee" />
-              <circle cx="304" cy="44" r="6" fill="#2dd4bf" />
-              <g transform="translate(92 46)">
-                <circle cx="0" cy="0" r="22" fill="rgba(15,23,42,0.9)" stroke="#22d3ee" strokeOpacity="0.5" />
-                <path d="M0 -12 V0 L8 6" stroke="#67e8f9" strokeWidth="2" strokeLinecap="round" fill="none" />
-              </g>
-              <g transform="translate(188 118)">
-                <circle cx="0" cy="0" r="22" fill="rgba(15,23,42,0.9)" stroke="#22d3ee" strokeOpacity="0.5" />
-                <path d="M-10 2h20M-6-4h12" stroke="#5eead4" strokeWidth="2" strokeLinecap="round" />
-              </g>
-              <g transform="translate(248 84)">
-                <circle cx="-10" cy="22" r="14" stroke="#67e8f9" strokeWidth="2" fill="none" />
-                <circle cx="18" cy="22" r="14" stroke="#67e8f9" strokeWidth="2" fill="none" />
-                <path d="M-10 22l13-13h11l14 13M3 9l-7-6h-9" stroke="#2dd4bf" strokeWidth="2" fill="none" strokeLinecap="round" />
-              </g>
-            </svg>
+          <div className="relative hidden min-h-[240px] items-center justify-center lg:flex">
+            <div className="absolute right-4 top-4 rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
+                <path
+                  d="M18 34a10 10 0 1 1 4-19 12 12 0 0 1 22 8h1a8 8 0 1 1 0 16H18z"
+                  fill="none"
+                  stroke="#67e8f9"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="42" cy="13" r="3" fill="#5eead4" />
+              </svg>
+            </div>
+            <div className="absolute right-16 top-[96px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 68 44" className="h-10 w-14" aria-hidden="true">
+                <circle cx="14" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <circle cx="50" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <path
+                  d="M14 30l14-14h12l14 14M28 16l-7-6h-9"
+                  fill="none"
+                  stroke="#2dd4bf"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <div className="absolute right-0 top-[126px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
+              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
+                <circle cx="28" cy="28" r="20" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+                <path d="M28 28V15M28 28l10 6" stroke="#99f6e4" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
         </div>
       </section>
