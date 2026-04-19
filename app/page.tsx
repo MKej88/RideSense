@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { BestWindow, GeocodeResult, RouteAnalysisResponse, WeatherResponse } from "@/lib/types";
 
@@ -168,6 +169,7 @@ export default function HomePage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [minDistanceKm, setMinDistanceKm] = useState("15");
   const [maxDistanceKm, setMaxDistanceKm] = useState("35");
+  const [showHeroImage, setShowHeroImage] = useState(true);
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
   const deferredQuery = useDeferredValue(query);
@@ -552,6 +554,23 @@ export default function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
+      <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-slate-950 shadow-[0_25px_70px_-40px_rgba(34,211,238,0.6)]">
+        {showHeroImage ? (
+          <Image
+            src="/ridesense-hero.png"
+            alt="RideSense banner"
+            width={1536}
+            height={1024}
+            className="h-auto w-full object-cover"
+            priority
+            onError={() => setShowHeroImage(false)}
+          />
+        ) : (
+          <div className="h-52 w-full bg-[radial-gradient(circle_at_70%_20%,rgba(34,211,238,0.22),rgba(2,6,23,0.95)_50%),linear-gradient(120deg,#020617_15%,#0b2447_55%,#020617_100%)]" />
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-950/85 to-transparent" />
+      </section>
+
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
