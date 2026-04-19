@@ -217,9 +217,9 @@ export function LocationMap({
   }, [lat, lon, label, routeName, routePoints]);
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">Kart</h3>
-      <p className="mt-1 text-sm text-slate-600">
+    <section className="rounded-xl bg-slate-900 p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-slate-100">Kart</h3>
+      <p className="mt-1 text-sm text-slate-400">
         Dra markøren for å oppdatere startplass og vær. Når du velger en rute, vises den som en
         tydelig orange linje og kartet sentreres på ruten.
       </p>

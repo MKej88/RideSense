@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 body {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: #020617;
+  color: #e2e8f0;
 }
 
 .ridesense-map-pin {
@@ -17,7 +17,7 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  border: 2px solid #ffffff;
+  border: 2px solid #0f172a;
   background-color: #dc2626;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35);
 }

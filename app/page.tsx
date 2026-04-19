@@ -15,7 +15,7 @@ const LocationMap = dynamic(
   () => import("@/components/LocationMap").then((module) => module.LocationMap),
   {
     loading: () => (
-      <section className="rounded-xl bg-white p-4 text-slate-600 shadow-sm">Laster kart …</section>
+      <section className="rounded-xl bg-slate-900 p-4 text-slate-400 shadow-sm">Laster kart …</section>
     ),
     ssr: false
   }
@@ -497,13 +497,13 @@ export default function HomePage() {
           Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
         </p>
 
-        <div className="mt-5 inline-flex rounded-xl bg-white/20 p-1">
+        <div className="mt-5 inline-flex rounded-xl bg-slate-900/20 p-1">
           <button
             type="button"
             className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
               activeTab === "forecast"
-                ? "bg-white text-slate-900"
-                : "text-white hover:bg-white/20"
+                ? "bg-slate-900 text-slate-100"
+                : "text-white hover:bg-slate-900/20"
             }`}
             onClick={() => setActiveTab("forecast")}
           >
@@ -513,8 +513,8 @@ export default function HomePage() {
             type="button"
             className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
               activeTab === "routes"
-                ? "bg-white text-slate-900"
-                : "text-white hover:bg-white/20"
+                ? "bg-slate-900 text-slate-100"
+                : "text-white hover:bg-slate-900/20"
             }`}
             onClick={() => setActiveTab("routes")}
           >
@@ -523,15 +523,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">1) Velg sted</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
+        <h2 className="text-lg font-semibold text-slate-100">1) Velg sted</h2>
+        <p className="mt-1 text-sm text-slate-400">
           Søk etter område først, deretter startadresse. Så får du resultat direkte.
         </p>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
           <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-600 px-3 py-2 focus:border-slate-500 focus:outline-none"
             placeholder="Søk sted i Norge"
             value={query}
             onChange={(event) => {
@@ -553,7 +553,7 @@ export default function HomePage() {
           />
           <button
             type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-600 disabled:opacity-60"
             disabled={weatherLoading || addressLoading || placeLoading || query.trim().length < 2}
           >
             Søk
@@ -561,22 +561,22 @@ export default function HomePage() {
           <button
             type="button"
             onClick={useMyLocation}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+            className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200 hover:bg-slate-800 disabled:opacity-60"
             disabled={weatherLoading || addressLoading || placeLoading}
           >
             Bruk min posisjon
           </button>
         </form>
 
-        {placeLoading && <p className="mt-3 text-sm text-slate-600">Søker steder …</p>}
+        {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
 
         {results.length > 0 && (
-          <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
             {results.map((place) => (
               <li key={`${place.name}-${place.lat}-${place.lon}`}>
                 <button
                   type="button"
-                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-200"
+                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
                   onClick={() => {
                     chooseArea(place);
                     void loadWeatherForPlace(place);
@@ -590,37 +590,37 @@ export default function HomePage() {
         )}
 
         {!placeLoading && query.trim().length >= 2 && results.length === 0 && !selectedArea && !error && (
-          <p className="mt-3 text-sm text-slate-600">
+          <p className="mt-3 text-sm text-slate-400">
             Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
           </p>
         )}
 
-        {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
 
       </section>
 
       {!weather && !weatherLoading && !error && (
-        <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-600">
+        <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
           Velg et sted for å se værtime-for-time, sykkelscore og dagens beste tidsvindu.
         </section>
       )}
 
       {weatherLoading && (
-        <section className="rounded-xl bg-white p-6 text-slate-600 shadow-sm">Laster data …</section>
+        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
       )}
 
       {weather && activeTab === "forecast" && (
         <section className="space-y-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
-            <div className="mt-3 inline-flex rounded-lg bg-slate-100 p-1">
+            <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
                 type="button"
                 onClick={() => setForecastRange("24h")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "24h"
-                    ? "bg-white font-medium text-slate-900 shadow-sm"
-                    : "text-slate-700"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    : "text-slate-300"
                 }`}
               >
                 Neste 24 timer
@@ -630,8 +630,8 @@ export default function HomePage() {
                 onClick={() => setForecastRange("7d")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "7d"
-                    ? "bg-white font-medium text-slate-900 shadow-sm"
-                    : "text-slate-700"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    : "text-slate-300"
                 }`}
               >
                 Neste 7 dager
@@ -655,12 +655,12 @@ export default function HomePage() {
               />
             </div>
 
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-slate-400">
               {forecastRange === "24h"
                 ? "Nattimer fra 00:00 til 06:00 er skjult for å fokusere på aktuelle sykkeltider."
                 : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
             </p>
-            <p className="mt-2 text-sm text-slate-700">
+            <p className="mt-2 text-sm text-slate-300">
               Datagrunnlag: {weather.dataBasis === "forecast_plus_observation"
                 ? "prognose + observasjon"
                 : "kun prognose"}
@@ -676,7 +676,7 @@ export default function HomePage() {
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-sm">
               <div className="flex min-w-max gap-2">
                 {forecastDays.map((day) => (
                   <button
@@ -686,7 +686,7 @@ export default function HomePage() {
                     className={`rounded-lg px-3 py-2 text-sm ${
                       day.dayKey === selectedForecastDay
                         ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-600"
                     }`}
                   >
                     {day.label}
@@ -701,20 +701,20 @@ export default function HomePage() {
 
       {activeTab === "routes" && (
         <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Ruteanalyse</h2>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
+            <p className="mt-1 text-sm text-slate-400">
               Egen modul for rutevalg. Velg min/maks km og sammenlign flere ruter.
             </p>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-base font-semibold text-slate-900">Startadresse (kun ruteanalyse)</h3>
-              <p className="mt-1 text-sm text-slate-600">
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <h3 className="text-base font-semibold text-slate-100">Startadresse (kun ruteanalyse)</h3>
+              <p className="mt-1 text-sm text-slate-400">
                 Velg sted på hovedfanen først. Søk deretter adresse her for å analysere ruter.
               </p>
 
               <input
-                className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-slate-500 focus:outline-none"
+                className="mt-3 w-full rounded-lg border border-slate-600 px-3 py-2 focus:border-slate-500 focus:outline-none"
                 placeholder={
                   selectedArea
                     ? `Søk adresse i ${selectedArea.name}`
@@ -732,20 +732,20 @@ export default function HomePage() {
               />
 
               {addressLoading && (
-                <p className="mt-3 text-sm text-slate-600">Søker adresser …</p>
+                <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>
               )}
 
               {addressError && (
-                <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{addressError}</p>
+                <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
               )}
 
               {addressResults.length > 0 && (
-                <ul className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
                   {addressResults.map((place) => (
                     <li key={`${place.name}-${place.lat}-${place.lon}`}>
                       <button
                         type="button"
-                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100"
+                        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
                         onClick={() => void loadWeatherForPlace(place)}
                       >
                         {place.name}
@@ -760,20 +760,20 @@ export default function HomePage() {
                 selectedArea &&
                 addressQuery.trim().length >= 2 &&
                 addressResults.length === 0 && (
-                  <p className="mt-3 text-sm text-slate-600">
+                  <p className="mt-3 text-sm text-slate-400">
                     Ingen adresser funnet ennå. Fortsett å skrive eller prøv annen stavemåte.
                   </p>
                 )}
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-slate-50 p-3">
+              <div className="rounded-lg bg-slate-800/60 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                <p className="mt-1 text-sm font-medium text-slate-900">
+                <p className="mt-1 text-sm font-medium text-slate-100">
                   {selected?.name || "Velg adresse først"}
                 </p>
               </div>
-              <label className="rounded-lg bg-slate-50 p-3">
+              <label className="rounded-lg bg-slate-800/60 p-3">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Min km</span>
                 <input
                   type="number"
@@ -781,10 +781,10 @@ export default function HomePage() {
                   step="1"
                   value={minDistanceKm}
                   onChange={(event) => setMinDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 />
               </label>
-              <label className="rounded-lg bg-slate-50 p-3">
+              <label className="rounded-lg bg-slate-800/60 p-3">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Maks km</span>
                 <input
                   type="number"
@@ -792,7 +792,7 @@ export default function HomePage() {
                   step="1"
                   value={maxDistanceKm}
                   onChange={(event) => setMaxDistanceKm(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  className="mt-2 w-full rounded-md border border-slate-600 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 />
               </label>
             </div>
@@ -800,7 +800,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => void analyzeRoutes()}
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60"
+              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
               disabled={!selected || routeLoading || weatherLoading || addressLoading}
             >
               Analyser ruter
