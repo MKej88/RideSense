@@ -489,6 +489,14 @@ export default function HomePage() {
     return buildBestWindowFromHours(visibleWeatherHours);
   }, [forecastRange, visibleWeatherHours]);
 
+  const visibleBestWindow7d = useMemo(() => {
+    if (forecastRange !== "7d") {
+      return null;
+    }
+
+    return buildBestWindowFromHours(visibleWeatherHours);
+  }, [forecastRange, visibleWeatherHours]);
+
   const updatedWeatherAt = useMemo(() => {
     if (!weather) {
       return null;
@@ -679,7 +687,7 @@ export default function HomePage() {
             {forecastRange === "7d" && (
               <div className="mt-4">
                 <BestWindowCard
-                  bestWindow={weather.bestWindowNext7Days}
+                  bestWindow={visibleBestWindow7d}
                   title="Beste tidspunkt neste 7 dager"
                   emptyMessage="Fant ikke tilgjengelige timer i de neste 7 dagene."
                   includeDay
