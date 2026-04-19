@@ -74,7 +74,7 @@ function formatSymbol(symbolCode?: string): string {
 
 function getSymbolIconUrl(symbolCode?: string): string | null {
   const symbol = (symbolCode || "unknown").toLowerCase();
-  return `/weather-symbols/${encodeURIComponent(symbol)}.svg`;
+  return `/api/weather-symbol?code=${encodeURIComponent(symbol)}`;
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
