@@ -41,6 +41,12 @@ interface GeonorgeAddressResponse {
   adresser?: GeonorgeAddressResult[];
 }
 
+interface ParsedStreetQuery {
+  streetName: string;
+  houseNumber?: string;
+  houseLetter?: string;
+}
+
 function parseOptionalNumber(value: string | null): number | undefined {
   if (value === null) {
     return undefined;
@@ -84,6 +90,7 @@ async function searchGeonorgeAddresses(
   nearLat?: number,
   nearLon?: number
 ): Promise<GeocodeResult[]> {
+  const parsedStreetQuery = parseStreetQuery(query);
   const searches = [
     fetchGeonorgeAddresses({
       adressenavn: query,
@@ -97,7 +104,24 @@ async function searchGeonorgeAddresses(
       fuzzy: "true",
       treffPerSide: String(limit),
       side: "0"
-    })
+    }),
+    ...(parsedStreetQuery
+      ? [
+          fetchGeonorgeAddresses({
+            adressenavn: parsedStreetQuery.streetName,
+            ...(parsedStreetQuery.houseNumber
+              ? { nummer: parsedStreetQuery.houseNumber }
+              : {}),
+            ...(parsedStreetQuery.houseLetter
+              ? { bokstav: parsedStreetQuery.houseLetter }
+              : {}),
+            ...(context ? { kommunenavn: context } : {}),
+            fuzzy: "true",
+            treffPerSide: String(limit),
+            side: "0"
+          })
+        ]
+      : [])
   ];
 
   const settled = await Promise.allSettled(searches);
@@ -225,6 +249,30 @@ function normalizeText(value?: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .toLocaleLowerCase("nb-NO");
+}
+
+function parseStreetQuery(query: string): ParsedStreetQuery | null {
+  const trimmed = query.trim();
+
+  if (trimmed.length < 2) {
+    return null;
+  }
+
+  const addressMatch = trimmed.match(/^(.+?)\s+(\d+)([a-zA-Z]?)$/u);
+
+  if (!addressMatch) {
+    return {
+      streetName: trimmed
+    };
+  }
+
+  const [, streetName, houseNumber, houseLetter] = addressMatch;
+
+  return {
+    streetName: streetName.trim(),
+    houseNumber,
+    houseLetter: houseLetter ? houseLetter.toUpperCase() : undefined
+  };
 }
 
 function toDisplayCase(value?: string): string {
