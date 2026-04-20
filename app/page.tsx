@@ -1055,7 +1055,9 @@ export default function HomePage() {
             <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg bg-slate-800/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Distanse tur/retur</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    {routeAnalysis.route.isRoundTrip ? "Distanse tur/retur" : "Distanse en vei"}
+                  </p>
                   <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.distanceKm} km</p>
                 </div>
                 <div className="rounded-lg bg-slate-800/60 p-3">
@@ -1067,6 +1069,11 @@ export default function HomePage() {
                   <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.sampledPoints.length}</p>
                 </div>
               </div>
+              {!routeAnalysis.route.isRoundTrip ? (
+                <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200">
+                  Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning.
+                </p>
+              ) : null}
 
               <BestWindowCard
                 bestWindow={routeAnalysis.bestWindowNext24h}

@@ -79,7 +79,7 @@ async function searchNominatimVariants(
 
 async function searchGeonorgeAddresses(
   query: string,
-  context: string,
+  context?: string,
   limit = 10,
   nearLat?: number,
   nearLon?: number
@@ -87,19 +87,13 @@ async function searchGeonorgeAddresses(
   const searches = [
     fetchGeonorgeAddresses({
       adressenavn: query,
-      kommunenavn: context,
+      ...(context ? { kommunenavn: context } : {}),
       fuzzy: "true",
       treffPerSide: String(limit),
       side: "0"
     }),
     fetchGeonorgeAddresses({
-      sok: `${query} ${context}`,
-      fuzzy: "true",
-      treffPerSide: String(limit),
-      side: "0"
-    }),
-    fetchGeonorgeAddresses({
-      sok: query,
+      sok: context ? `${query} ${context}` : query,
       fuzzy: "true",
       treffPerSide: String(limit),
       side: "0"
@@ -138,7 +132,7 @@ async function searchGeonorgeAddresses(
         Number.isFinite(item.lat) &&
         Number.isFinite(item.lon) &&
         item.name.length > 0 &&
-        matchesSelectedPlace(item, context, nearLat, nearLon)
+        (!context || matchesSelectedPlace(item, context, nearLat, nearLon))
     )
     .sort((left, right) => {
       if (nearLat === undefined || nearLon === undefined) {
@@ -409,13 +403,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const results = await searchNominatimVariants(
+    const addressResults = await searchGeonorgeAddresses(query, undefined, 8, nearLat, nearLon);
+    const placeResults = await searchNominatimVariants(
       query,
       context,
       context ? 10 : 6,
       nearLat,
       nearLon
     );
+    const seen = new Set<string>();
+    const results = [...addressResults, ...placeResults].filter((item) => {
+      const key = `${item.name}|${item.lat}|${item.lon}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    }).slice(0, 10);
+
     return NextResponse.json(
       { results },
       {

@@ -1416,22 +1416,22 @@ export async function analyzeUserRoute(
   }
 
   const returnRoute = await fetchDirectedRoute(stop, start);
-
-  if (!returnRoute) {
-    throw new Error("Fant ikke kjørbar returrute mellom stopp og start.");
-  }
-
-  const roundTripPoints = [...outboundRoute.points, ...returnRoute.points.slice(1)];
+  const hasReturnRoute = Boolean(returnRoute);
+  const roundTripPoints = hasReturnRoute
+    ? [...outboundRoute.points, ...(returnRoute?.points.slice(1) || [])]
+    : outboundRoute.points;
   const totalRoundTripDistanceKm = roundToOneDecimal(
-    outboundRoute.distanceKm + returnRoute.distanceKm
+    outboundRoute.distanceKm + (returnRoute?.distanceKm || 0)
   );
   const route: Route = {
     id: "brukervalg",
     shortName: "Valgt rute",
-    description: "Tur/retur langs vei mellom valgt start og stopp",
-    distanceKm: totalRoundTripDistanceKm,
+    description: hasReturnRoute
+      ? "Tur/retur langs vei mellom valgt start og stopp"
+      : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)",
+    distanceKm: hasReturnRoute ? totalRoundTripDistanceKm : outboundRoute.distanceKm,
     oneWayDistanceKm: outboundRoute.distanceKm,
-    isRoundTrip: true,
+    isRoundTrip: hasReturnRoute,
     startLabel,
     endLabel: stopLabel,
     points: roundTripPoints
