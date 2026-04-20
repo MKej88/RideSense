@@ -1108,25 +1108,52 @@ interface RouteDirectionSegment {
   sampleIndex: number;
 }
 
-function buildRouteDirectionSegments(points: RoutePoint[]): RouteDirectionSegment[] {
-  if (points.length < 2) {
+function findNearestSampleIndex(point: RoutePoint, sampledPoints: RoutePoint[]): number {
+  if (sampledPoints.length === 0) {
+    return 0;
+  }
+
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  sampledPoints.forEach((samplePoint, index) => {
+    const distance = estimateDistanceKm(point, samplePoint);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function buildRouteDirectionSegments(
+  routePoints: RoutePoint[],
+  sampledPoints: RoutePoint[]
+): RouteDirectionSegment[] {
+  if (routePoints.length < 2 || sampledPoints.length === 0) {
     return [];
   }
 
-  const segments = points
+  const segments = routePoints
     .slice(0, -1)
     .map((point, index) => {
-      const nextPoint = points[index + 1];
+      const nextPoint = routePoints[index + 1];
       const distance = estimateDistanceKm(point, nextPoint);
 
       if (distance <= 0) {
         return null;
       }
 
+      const midpoint: RoutePoint = {
+        lat: (point.lat + nextPoint.lat) / 2,
+        lon: (point.lon + nextPoint.lon) / 2
+      };
+
       return {
         headingDegrees: (calculateBearing(point, nextPoint) + 360) % 360,
         distance,
-        sampleIndex: index
+        sampleIndex: findNearestSampleIndex(midpoint, sampledPoints)
       };
     })
     .filter((segment): segment is { headingDegrees: number; distance: number; sampleIndex: number } =>
@@ -1228,7 +1255,7 @@ function buildBestWindow(
   const upperBoundTs = nextHourTs + maxHoursAhead * 60 * 60 * 1000;
   const relevantHours = hours.filter((hour) => {
     const ts = new Date(hour.time).getTime();
-    return ts >= nextHourTs && ts <= upperBoundTs;
+    return ts >= nextHourTs && ts < upperBoundTs;
   });
 
   if (relevantHours.length === 0) {
@@ -1346,7 +1373,7 @@ export async function analyzeUserRoute(
     throw new Error("Fant ikke nok værdata for ruten.");
   }
 
-  const routeDirectionSegments = buildRouteDirectionSegments(sampledPoints);
+  const routeDirectionSegments = buildRouteDirectionSegments(route.points, sampledPoints);
   const routeHours: RouteWindHour[] = Array.from({ length: hourCount }, (_, hourIndex) => {
     const hourlySamples = forecasts.map((forecast) => forecast.hours[hourIndex]);
     return buildRouteWeatherHour(hourlySamples, hourIndex, routeDirectionSegments);
