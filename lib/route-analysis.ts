@@ -1249,7 +1249,6 @@ function mostFrequentSymbolCode(symbolCodes: Array<string | undefined>): string 
 
 function buildRouteWeatherHour(
   hours: Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
-  sampleIndex: number,
   routeDirectionSegments: RouteDirectionSegment[]
 ): RouteWindHour {
   const selectedHours = hours.filter((hour) => Boolean(hour));
@@ -1293,7 +1292,7 @@ function buildRouteWeatherHour(
   const finalScore = Math.max(0, Math.min(100, Math.round(avgScore + tailwindBonus)));
 
   return {
-    time: selectedHours[Math.min(sampleIndex, selectedHours.length - 1)].time,
+    time: selectedHours[0].time,
     score: finalScore,
     scoreLabel: scoreLabelFromScore(finalScore),
     windSpeed: roundToOneDecimal(avgWind),
@@ -1443,7 +1442,7 @@ export async function analyzeUserRoute(
   const routeDirectionSegments = buildRouteDirectionSegments(route.points, sampledPoints);
   const routeHours: RouteWindHour[] = Array.from({ length: hourCount }, (_, hourIndex) => {
     const hourlySamples = forecasts.map((forecast) => forecast.hours[hourIndex]);
-    return buildRouteWeatherHour(hourlySamples, hourIndex, routeDirectionSegments);
+    return buildRouteWeatherHour(hourlySamples, routeDirectionSegments);
   });
 
   const analysisRunMs = Date.now();
