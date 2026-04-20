@@ -161,6 +161,7 @@ export default function HomePage() {
   const [stopLoading, setStopLoading] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
   const [selectedStop, setSelectedStop] = useState<GeocodeResult | null>(null);
+  const [selectedRouteStart, setSelectedRouteStart] = useState<GeocodeResult | null>(null);
   const [selected, setSelected] = useState<GeocodeResult | null>(null);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -189,6 +190,7 @@ export default function HomePage() {
     setAddressResults([]);
     setAddressError(null);
     setSelected(null);
+    setSelectedRouteStart(null);
     setWeather(null);
     setRouteAnalysis(null);
     setRouteError(null);
@@ -449,7 +451,7 @@ export default function HomePage() {
   }, []);
 
   const analyzeRoutes = useCallback(async (): Promise<void> => {
-    if (!selected || !selectedStop) {
+    if (!selectedRouteStart || !selectedStop) {
       setRouteError("Velg både startadresse og stoppadresse før analyse.");
       return;
     }
@@ -460,7 +462,7 @@ export default function HomePage() {
 
     try {
       const response = await fetch(
-        `/api/route-analysis?startLat=${selected.lat}&startLon=${selected.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selected.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`
+        `/api/route-analysis?startLat=${selectedRouteStart.lat}&startLon=${selectedRouteStart.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selectedRouteStart.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`
       );
       const payload = (await response.json()) as RouteTimeAnalysisResponse & ApiError;
 
@@ -477,7 +479,7 @@ export default function HomePage() {
     } finally {
       setRouteLoading(false);
     }
-  }, [selected, selectedStop]);
+  }, [selectedRouteStart, selectedStop]);
 
 
   const visibleWeatherHours = useMemo(() => {
@@ -938,13 +940,13 @@ export default function HomePage() {
                 <input
                   className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
                   placeholder="Søk startadresse i Norge"
-                  value={addressQuery}
-                  onChange={(event) => {
-                    setAddressQuery(event.target.value);
-                    setAddressError(null);
-                    setSelected(null);
-                    setRouteAnalysis(null);
-                  }}
+                value={addressQuery}
+                onChange={(event) => {
+                  setAddressQuery(event.target.value);
+                  setAddressError(null);
+                  setSelectedRouteStart(null);
+                  setRouteAnalysis(null);
+                }}
                 />
                 {addressLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
                 {addressError && (
@@ -958,7 +960,7 @@ export default function HomePage() {
                           type="button"
                           className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
                           onClick={() => {
-                            setSelected(place);
+                            setSelectedRouteStart(place);
                             setAddressQuery(place.name);
                             setAddressResults([]);
                           }}
@@ -1013,7 +1015,7 @@ export default function HomePage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-slate-800/60 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Start</p>
-                <p className="mt-1 text-sm font-medium text-slate-100">{selected?.name || "Ikke valgt"}</p>
+                <p className="mt-1 text-sm font-medium text-slate-100">{selectedRouteStart?.name || "Ikke valgt"}</p>
               </div>
               <div className="rounded-lg bg-slate-800/60 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Stopp</p>
@@ -1025,7 +1027,9 @@ export default function HomePage() {
               type="button"
               onClick={() => void analyzeRoutes()}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
-              disabled={!selected || !selectedStop || routeLoading || addressLoading || stopLoading}
+              disabled={
+                !selectedRouteStart || !selectedStop || routeLoading || addressLoading || stopLoading
+              }
             >
               Analyser valgt rute
             </button>

@@ -1102,9 +1102,48 @@ function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+interface RouteDirectionSegment {
+  headingDegrees: number;
+  weight: number;
+  sampleIndex: number;
+}
 
-function getRouteHeadingDegrees(start: RoutePoint, end: RoutePoint): number {
-  return (calculateBearing(start, end) + 360) % 360;
+function buildRouteDirectionSegments(points: RoutePoint[]): RouteDirectionSegment[] {
+  if (points.length < 2) {
+    return [];
+  }
+
+  const segments = points
+    .slice(0, -1)
+    .map((point, index) => {
+      const nextPoint = points[index + 1];
+      const distance = estimateDistanceKm(point, nextPoint);
+
+      if (distance <= 0) {
+        return null;
+      }
+
+      return {
+        headingDegrees: (calculateBearing(point, nextPoint) + 360) % 360,
+        distance,
+        sampleIndex: index
+      };
+    })
+    .filter((segment): segment is { headingDegrees: number; distance: number; sampleIndex: number } =>
+      Boolean(segment)
+    );
+
+  const totalDistance = segments.reduce((sum, segment) => sum + segment.distance, 0);
+
+  if (totalDistance <= 0) {
+    return [];
+  }
+
+  return segments.map((segment) => ({
+    headingDegrees: segment.headingDegrees,
+    sampleIndex: segment.sampleIndex,
+    weight: segment.distance / totalDistance
+  }));
 }
 
 function getTailwindComponentMs(
@@ -1138,7 +1177,7 @@ function scoreLabelFromScore(score: number): "good" | "ok" | "bad" {
 function buildRouteWeatherHour(
   hours: Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
   sampleIndex: number,
-  routeHeading: number
+  routeDirectionSegments: RouteDirectionSegment[]
 ): RouteWindHour {
   const selectedHours = hours.filter((hour) => Boolean(hour));
   const avgScore = selectedHours.reduce((sum, hour) => sum + hour.score, 0) / selectedHours.length;
@@ -1148,11 +1187,18 @@ function buildRouteWeatherHour(
   const avgTemp =
     selectedHours.reduce((sum, hour) => sum + hour.airTemperature, 0) / selectedHours.length;
   const avgTailwind =
-    selectedHours.reduce(
-      (sum, hour) =>
-        sum + getTailwindComponentMs(hour.windSpeed, hour.windFromDirection, routeHeading),
-      0
-    ) / selectedHours.length;
+    routeDirectionSegments.length > 0
+      ? routeDirectionSegments.reduce((sum, segment) => {
+          const segmentHour = selectedHours[segment.sampleIndex] || selectedHours[0];
+          const segmentTailwind = getTailwindComponentMs(
+            segmentHour.windSpeed,
+            segmentHour.windFromDirection,
+            segment.headingDegrees
+          );
+
+          return sum + segmentTailwind * segment.weight;
+        }, 0)
+      : 0;
 
   const tailwindBonus = Math.max(-6, Math.min(8, avgTailwind * 2));
   const finalScore = Math.max(0, Math.min(100, Math.round(avgScore + tailwindBonus)));
@@ -1300,10 +1346,10 @@ export async function analyzeUserRoute(
     throw new Error("Fant ikke nok værdata for ruten.");
   }
 
-  const heading = getRouteHeadingDegrees(start, stop);
+  const routeDirectionSegments = buildRouteDirectionSegments(sampledPoints);
   const routeHours: RouteWindHour[] = Array.from({ length: hourCount }, (_, hourIndex) => {
     const hourlySamples = forecasts.map((forecast) => forecast.hours[hourIndex]);
-    return buildRouteWeatherHour(hourlySamples, hourIndex, heading);
+    return buildRouteWeatherHour(hourlySamples, hourIndex, routeDirectionSegments);
   });
 
   const analysisRunMs = Date.now();
