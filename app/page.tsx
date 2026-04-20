@@ -609,9 +609,17 @@ export default function HomePage() {
         lon
       };
 
+      if (activeTab === "routes") {
+        setSelected(movedPlace);
+        setSelectedRouteStart(movedPlace);
+        setRouteAnalysis(null);
+        setRouteError(null);
+        return;
+      }
+
       await loadWeatherForPlace(movedPlace);
     },
-    [loadWeatherForPlace]
+    [activeTab, loadWeatherForPlace]
   );
 
   return (
@@ -1077,7 +1085,8 @@ export default function HomePage() {
               <WeatherTable
                 hours={routeAnalysis.hours.map((hour) => ({
                   ...hour,
-                  scoreReasons: [`Medvindskomponent: ${hour.tailwindMs} m/s`],
+                  tailwindMs: hour.tailwindMs,
+                  scoreReasons: [`Medvindskomponent: ${hour.tailwindMs.toFixed(1)} m/s`],
                   dataBasis: "forecast_only",
                   confidence: {
                     score: 70,

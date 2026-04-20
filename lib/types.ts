@@ -43,6 +43,7 @@ export interface ScoredWeatherHour extends WeatherHourRaw {
   score: number;
   scoreLabel: ScoreLabel;
   scoreReasons: string[];
+  tailwindMs?: number;
   dataBasis: WeatherDataBasis;
   confidence: DataConfidence;
 }
