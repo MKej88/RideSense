@@ -273,6 +273,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const trimmedQuery = deferredAddressQuery.trim();
+    const scopedArea = activeTab === "routes" ? null : selectedArea;
 
     if (trimmedQuery.length < 2) {
       setAddressResults([]);
@@ -282,7 +283,7 @@ export default function HomePage() {
     }
 
     let active = true;
-    const contextPart = selectedArea ? selectedArea.name : "norge";
+    const contextPart = scopedArea ? scopedArea.name : "norge";
     const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${contextPart.toLocaleLowerCase("nb-NO")}`;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
@@ -299,10 +300,10 @@ export default function HomePage() {
       setAddressError(null);
 
       try {
-        const url = selectedArea
+        const url = scopedArea
           ? `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(
               areaContext
-            )}&nearLat=${selectedArea.lat}&nearLon=${selectedArea.lon}`
+            )}&nearLat=${scopedArea.lat}&nearLon=${scopedArea.lon}`
           : `/api/geocode?q=${encodeURIComponent(trimmedQuery)}`;
         const response = await fetch(url, {
           signal: controller.signal
@@ -345,7 +346,7 @@ export default function HomePage() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [deferredAddressQuery, areaContext, selectedArea]);
+  }, [activeTab, deferredAddressQuery, areaContext, selectedArea]);
 
 
   useEffect(() => {
