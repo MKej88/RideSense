@@ -1407,19 +1407,28 @@ export async function analyzeUserRoute(
   startLabel: string,
   stopLabel: string
 ): Promise<RouteTimeAnalysisResponse> {
-  const oneWayRoute = await fetchDirectedRoute(start, stop);
+  const outboundRoute = await fetchDirectedRoute(start, stop);
 
-  if (!oneWayRoute) {
+  if (!outboundRoute) {
     throw new Error("Fant ikke kjørbar rute mellom start og stopp.");
   }
 
-  const roundTripPoints = [...oneWayRoute.points, ...oneWayRoute.points.slice(0, -1).reverse()];
+  const returnRoute = await fetchDirectedRoute(stop, start);
+
+  if (!returnRoute) {
+    throw new Error("Fant ikke kjørbar returrute mellom stopp og start.");
+  }
+
+  const roundTripPoints = [...outboundRoute.points, ...returnRoute.points.slice(1)];
+  const totalRoundTripDistanceKm = roundToOneDecimal(
+    outboundRoute.distanceKm + returnRoute.distanceKm
+  );
   const route: Route = {
     id: "brukervalg",
     shortName: "Valgt rute",
     description: "Tur/retur langs vei mellom valgt start og stopp",
-    distanceKm: roundToOneDecimal(oneWayRoute.distanceKm * 2),
-    oneWayDistanceKm: oneWayRoute.distanceKm,
+    distanceKm: totalRoundTripDistanceKm,
+    oneWayDistanceKm: outboundRoute.distanceKm,
     isRoundTrip: true,
     startLabel,
     endLabel: stopLabel,
