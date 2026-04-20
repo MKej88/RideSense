@@ -1363,6 +1363,8 @@ async function fetchDirectedRoute(
   start: RoutePoint,
   stop: RoutePoint
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
+
   for (const profile of OSRM_PROFILES) {
     const url =
       `https://router.project-osrm.org/route/v1/${profile}/` +
@@ -1375,7 +1377,7 @@ async function fetchDirectedRoute(
           "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
         },
         next: { revalidate: 600 },
-        signal: AbortSignal.timeout(OSRM_FETCH_TIMEOUT_MS)
+        signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
       });
 
       if (!response.ok) {
