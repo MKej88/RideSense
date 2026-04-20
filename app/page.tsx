@@ -610,7 +610,6 @@ export default function HomePage() {
       };
 
       if (activeTab === "routes") {
-        setSelected(movedPlace);
         setSelectedRouteStart(movedPlace);
         setRouteAnalysis(null);
         setRouteError(null);
