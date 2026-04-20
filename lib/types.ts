@@ -128,6 +128,10 @@ export interface RouteWindHour {
   score: number;
   scoreLabel: ScoreLabel;
   windSpeed: number;
+  cloudCoverPercent: number;
+  symbolCode?: string;
+  windFromDirection?: number;
+  windGust?: number;
   precipitationAmount: number;
   airTemperature: number;
   tailwindMs: number;

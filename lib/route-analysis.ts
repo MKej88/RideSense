@@ -1201,6 +1201,52 @@ function scoreLabelFromScore(score: number): "good" | "ok" | "bad" {
   return "bad";
 }
 
+function averageDirectionDegrees(directions: number[]): number | undefined {
+  if (directions.length === 0) {
+    return undefined;
+  }
+
+  const vector = directions.reduce(
+    (acc, direction) => {
+      const radians = (direction * Math.PI) / 180;
+      return {
+        x: acc.x + Math.cos(radians),
+        y: acc.y + Math.sin(radians)
+      };
+    },
+    { x: 0, y: 0 }
+  );
+
+  if (Math.abs(vector.x) < 1e-6 && Math.abs(vector.y) < 1e-6) {
+    return undefined;
+  }
+
+  return (((Math.atan2(vector.y, vector.x) * 180) / Math.PI) + 360) % 360;
+}
+
+function mostFrequentSymbolCode(symbolCodes: Array<string | undefined>): string | undefined {
+  const counts = new Map<string, number>();
+
+  symbolCodes.forEach((symbolCode) => {
+    if (!symbolCode) {
+      return;
+    }
+
+    counts.set(symbolCode, (counts.get(symbolCode) || 0) + 1);
+  });
+
+  let bestSymbol: string | undefined;
+  let bestCount = -1;
+  counts.forEach((count, symbolCode) => {
+    if (count > bestCount) {
+      bestCount = count;
+      bestSymbol = symbolCode;
+    }
+  });
+
+  return bestSymbol;
+}
+
 function buildRouteWeatherHour(
   hours: Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
   sampleIndex: number,
@@ -1213,6 +1259,22 @@ function buildRouteWeatherHour(
     selectedHours.reduce((sum, hour) => sum + hour.precipitationAmount, 0) / selectedHours.length;
   const avgTemp =
     selectedHours.reduce((sum, hour) => sum + hour.airTemperature, 0) / selectedHours.length;
+  const avgCloudCover =
+    selectedHours.reduce((sum, hour) => sum + hour.cloudCoverPercent, 0) / selectedHours.length;
+  const avgWindGustSamples = selectedHours.filter((hour) => Number.isFinite(hour.windGust));
+  const avgWindGust =
+    avgWindGustSamples.length > 0
+      ? avgWindGustSamples.reduce((sum, hour) => sum + (hour.windGust || 0), 0) /
+        avgWindGustSamples.length
+      : undefined;
+  const avgWindDirection = averageDirectionDegrees(
+    selectedHours
+      .map((hour) => hour.windFromDirection)
+      .filter((direction): direction is number => Number.isFinite(direction))
+  );
+  const representativeSymbol = mostFrequentSymbolCode(
+    selectedHours.map((hour) => hour.symbolCode)
+  );
   const avgTailwind =
     routeDirectionSegments.length > 0
       ? routeDirectionSegments.reduce((sum, segment) => {
@@ -1235,6 +1297,11 @@ function buildRouteWeatherHour(
     score: finalScore,
     scoreLabel: scoreLabelFromScore(finalScore),
     windSpeed: roundToOneDecimal(avgWind),
+    cloudCoverPercent: roundToOneDecimal(avgCloudCover),
+    symbolCode: representativeSymbol,
+    windFromDirection:
+      avgWindDirection !== undefined ? roundToOneDecimal(avgWindDirection) : undefined,
+    windGust: avgWindGust !== undefined ? roundToOneDecimal(avgWindGust) : undefined,
     precipitationAmount: roundToOneDecimal(avgRain),
     airTemperature: roundToOneDecimal(avgTemp),
     tailwindMs: roundToOneDecimal(avgTailwind)

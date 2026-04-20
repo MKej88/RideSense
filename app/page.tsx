@@ -596,6 +596,10 @@ export default function HomePage() {
 
     return weather.observationSummary.observedAt || weather.hours[0]?.time || null;
   }, [weather]);
+  const mapAnchor = useMemo(
+    () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
+    [activeTab, selected, selectedRouteStart]
+  );
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -1073,10 +1077,6 @@ export default function HomePage() {
               <WeatherTable
                 hours={routeAnalysis.hours.map((hour) => ({
                   ...hour,
-                  cloudCoverPercent: 0,
-                  symbolCode: undefined,
-                  windFromDirection: undefined,
-                  windGust: undefined,
                   scoreReasons: [`Medvindskomponent: ${hour.tailwindMs} m/s`],
                   dataBasis: "forecast_only",
                   confidence: {
@@ -1091,11 +1091,11 @@ export default function HomePage() {
         </section>
       )}
 
-      {selected && (
+      {mapAnchor && (
         <LocationMap
-          lat={selected.lat}
-          lon={selected.lon}
-          label={selected.name}
+          lat={mapAnchor.lat}
+          lon={mapAnchor.lon}
+          label={mapAnchor.name}
           onMarkerMoved={onMarkerMoved}
           routeName={routeAnalysis?.route.shortName || null}
           routePoints={routeAnalysis?.route.points || []}
