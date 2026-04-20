@@ -451,14 +451,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const addressResults = await searchGeonorgeAddresses(query, undefined, 8, nearLat, nearLon);
-    const placeResults = await searchNominatimVariants(
-      query,
-      context,
-      context ? 10 : 6,
-      nearLat,
-      nearLon
-    );
+    const [addressSearchResult, placeSearchResult] = await Promise.allSettled([
+      searchGeonorgeAddresses(query, undefined, 8, nearLat, nearLon),
+      searchNominatimVariants(query, context, context ? 10 : 6, nearLat, nearLon)
+    ]);
+    const addressResults =
+      addressSearchResult.status === "fulfilled" ? addressSearchResult.value : [];
+    const placeResults = placeSearchResult.status === "fulfilled" ? placeSearchResult.value : [];
+
+    if (addressResults.length === 0 && placeResults.length === 0) {
+      throw new Error("Ingen treff fra stedsøk.");
+    }
+
     const seen = new Set<string>();
     const results = [...addressResults, ...placeResults].filter((item) => {
       const key = `${item.name}|${item.lat}|${item.lon}`;
