@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { analyzeUserRoute } from "@/lib/route-analysis";
 
 function parseCoordinate(value: string | null): number {
+  if (value === null || value.trim() === "") {
+    return NaN;
+  }
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
