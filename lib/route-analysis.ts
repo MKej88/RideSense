@@ -1469,12 +1469,33 @@ async function fetchDirectedRoute(
   start: RoutePoint,
   stop: RoutePoint
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
-  const vegvesenRoute = await fetchVegvesenRoute(start, stop);
-  if (vegvesenRoute) {
-    return vegvesenRoute;
+  const startCandidates = buildNearbyRoutingCandidates(start);
+  const stopCandidates = buildNearbyRoutingCandidates(stop);
+  const triedPairs = new Set<string>();
+
+  for (const startCandidate of startCandidates) {
+    for (const stopCandidate of stopCandidates) {
+      const pairKey = `${roundToOneDecimal(startCandidate.lat)}:${roundToOneDecimal(startCandidate.lon)}|${roundToOneDecimal(stopCandidate.lat)}:${roundToOneDecimal(stopCandidate.lon)}`;
+
+      if (triedPairs.has(pairKey)) {
+        continue;
+      }
+
+      triedPairs.add(pairKey);
+
+      const vegvesenRoute = await fetchVegvesenRoute(startCandidate, stopCandidate);
+      if (vegvesenRoute) {
+        return vegvesenRoute;
+      }
+
+      const osrmRoute = await fetchOsrmFallbackRoute(startCandidate, stopCandidate);
+      if (osrmRoute) {
+        return osrmRoute;
+      }
+    }
   }
 
-  return fetchOsrmFallbackRoute(start, stop);
+  return null;
 }
 
 async function fetchVegvesenRoute(
@@ -1588,6 +1609,20 @@ function formatRouteTimestamp(value: Date): string {
   const minutes = String(value.getMinutes()).padStart(2, "0");
   const seconds = String(value.getSeconds()).padStart(2, "0");
   return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+function buildNearbyRoutingCandidates(point: RoutePoint): RoutePoint[] {
+  const offsetKm = 0.18;
+  const latOffset = offsetKm / 111.32;
+  const lonOffset = offsetKm / Math.max(0.3, Math.cos((point.lat * Math.PI) / 180) * 111.32);
+
+  return [
+    point,
+    { lat: point.lat + latOffset, lon: point.lon },
+    { lat: point.lat - latOffset, lon: point.lon },
+    { lat: point.lat, lon: point.lon + lonOffset },
+    { lat: point.lat, lon: point.lon - lonOffset }
+  ];
 }
 
 function isLikelyLonLat(x: number, y: number): boolean {
