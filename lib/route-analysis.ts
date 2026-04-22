@@ -1465,6 +1465,10 @@ function buildBestWindow(
   };
 }
 
+function toRoutingCandidateKey(value: number): string {
+  return value.toFixed(4);
+}
+
 async function fetchDirectedRoute(
   start: RoutePoint,
   stop: RoutePoint
@@ -1475,7 +1479,7 @@ async function fetchDirectedRoute(
 
   for (const startCandidate of startCandidates) {
     for (const stopCandidate of stopCandidates) {
-      const pairKey = `${roundToOneDecimal(startCandidate.lat)}:${roundToOneDecimal(startCandidate.lon)}|${roundToOneDecimal(stopCandidate.lat)}:${roundToOneDecimal(stopCandidate.lon)}`;
+      const pairKey = `${toRoutingCandidateKey(startCandidate.lat)}:${toRoutingCandidateKey(startCandidate.lon)}|${toRoutingCandidateKey(stopCandidate.lat)}:${toRoutingCandidateKey(stopCandidate.lon)}`;
 
       if (triedPairs.has(pairKey)) {
         continue;
