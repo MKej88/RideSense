@@ -261,9 +261,7 @@ function parseStreetQuery(query: string): ParsedStreetQuery | null {
   const addressMatch = trimmed.match(/^(.+?)\s+(\d+)([a-zA-Z]?)$/u);
 
   if (!addressMatch) {
-    return {
-      streetName: trimmed
-    };
+    return null;
   }
 
   const [, streetName, houseNumber, houseLetter] = addressMatch;
@@ -273,6 +271,53 @@ function parseStreetQuery(query: string): ParsedStreetQuery | null {
     houseNumber,
     houseLetter: houseLetter ? houseLetter.toUpperCase() : undefined
   };
+}
+
+function mergeGeocodeResults(
+  addressResults: GeocodeResult[],
+  placeResults: GeocodeResult[],
+  limit: number
+): GeocodeResult[] {
+  const seen = new Set<string>();
+  const merged: GeocodeResult[] = [];
+  let addressIndex = 0;
+  let placeIndex = 0;
+
+  const appendNextUnique = (results: GeocodeResult[], startIndex: number): number => {
+    let currentIndex = startIndex;
+
+    while (currentIndex < results.length) {
+      const result = results[currentIndex];
+      const key = `${result.name}|${result.lat}|${result.lon}`;
+      currentIndex += 1;
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      merged.push(result);
+      return currentIndex;
+    }
+
+    return currentIndex;
+  };
+
+  while (merged.length < limit && (addressIndex < addressResults.length || placeIndex < placeResults.length)) {
+    if (addressIndex < addressResults.length) {
+      addressIndex = appendNextUnique(addressResults, addressIndex);
+    }
+
+    if (merged.length >= limit) {
+      break;
+    }
+
+    if (placeIndex < placeResults.length) {
+      placeIndex = appendNextUnique(placeResults, placeIndex);
+    }
+  }
+
+  return merged.slice(0, limit);
 }
 
 function toDisplayCase(value?: string): string {
@@ -463,15 +508,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       throw new Error("Ingen treff fra stedsøk.");
     }
 
-    const seen = new Set<string>();
-    const results = [...addressResults, ...placeResults].filter((item) => {
-      const key = `${item.name}|${item.lat}|${item.lon}`;
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    }).slice(0, 10);
+    const results = mergeGeocodeResults(addressResults, placeResults, 10);
 
     return NextResponse.json(
       { results },
