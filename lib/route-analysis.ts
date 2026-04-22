@@ -1469,39 +1469,7 @@ async function fetchDirectedRoute(
   start: RoutePoint,
   stop: RoutePoint
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
-  const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
-
-  for (const profile of OSRM_PROFILES) {
-    const directRoute = await fetchOsrmRouteForProfile(profile, start, stop, straightDistanceKm);
-    if (directRoute) {
-      return directRoute;
-    }
-
-    const snappedStart = await fetchNearestRoutablePoint(start, profile, straightDistanceKm);
-    const snappedStop = await fetchNearestRoutablePoint(stop, profile, straightDistanceKm);
-
-    if (!snappedStart || !snappedStop) {
-      continue;
-    }
-
-    const snappedRoute = await fetchOsrmRouteForProfile(
-      profile,
-      snappedStart,
-      snappedStop,
-      straightDistanceKm
-    );
-
-    if (snappedRoute) {
-      return snappedRoute;
-    }
-  }
-
-  const vegvesenRoute = await fetchVegvesenRoute(start, stop);
-  if (vegvesenRoute) {
-    return vegvesenRoute;
-  }
-
-  return null;
+  return fetchVegvesenRoute(start, stop);
 }
 
 async function fetchVegvesenRoute(
@@ -1561,86 +1529,6 @@ async function fetchVegvesenRoute(
     return {
       distanceKm,
       points
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchOsrmRouteForProfile(
-  profile: (typeof OSRM_PROFILES)[number],
-  start: RoutePoint,
-  stop: RoutePoint,
-  straightDistanceKm: number
-): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
-  const url =
-    `https://router.project-osrm.org/route/v1/${profile}/` +
-    `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
-    `?overview=full&geometries=geojson&steps=false&alternatives=false`;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
-      },
-      next: { revalidate: 600 },
-      signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json()) as OsrmResponse;
-    const bestRoute = payload.routes?.[0];
-
-    if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
-      return null;
-    }
-
-    return {
-      distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
-      points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchNearestRoutablePoint(
-  point: RoutePoint,
-  profile: (typeof OSRM_PROFILES)[number],
-  straightDistanceKm: number
-): Promise<RoutePoint | null> {
-  const url =
-    `https://router.project-osrm.org/nearest/v1/${profile}/` +
-    `${point.lon},${point.lat}?number=1`;
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
-      },
-      next: { revalidate: 600 },
-      signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json()) as {
-      waypoints?: Array<{ location?: [number, number] }>;
-    };
-    const location = payload.waypoints?.[0]?.location;
-
-    if (!location || location.length < 2) {
-      return null;
-    }
-
-    return {
-      lon: location[0],
-      lat: location[1]
     };
   } catch {
     return null;
