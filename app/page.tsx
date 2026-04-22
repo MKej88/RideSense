@@ -1071,9 +1071,7 @@ export default function HomePage() {
               </div>
               {!routeAnalysis.route.isRoundTrip ? (
                 <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200">
-                  {routeAnalysis.route.description.includes("Forenklet enveisrute")
-                    ? "Karttjenesten fant ikke veirute nå. Viser en forenklet rute mellom start og stopp som midlertidig fallback."
-                    : "Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning."}
+                  Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning.
                 </p>
               ) : null}
 

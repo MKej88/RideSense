@@ -1098,24 +1098,6 @@ function estimateDistanceKm(start: RoutePoint, end: RoutePoint): number {
   return Math.sqrt(latKm ** 2 + lonKm ** 2);
 }
 
-function buildFallbackRoutePoints(
-  start: RoutePoint,
-  stop: RoutePoint,
-  segments = 24
-): RoutePoint[] {
-  if (segments < 1) {
-    return [start, stop];
-  }
-
-  return Array.from({ length: segments + 1 }, (_, index) => {
-    const progress = index / segments;
-    return {
-      lat: start.lat + (stop.lat - start.lat) * progress,
-      lon: start.lon + (stop.lon - start.lon) * progress
-    };
-  });
-}
-
 function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }
@@ -1384,41 +1366,111 @@ async function fetchDirectedRoute(
   const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
 
   for (const profile of OSRM_PROFILES) {
-    const url =
-      `https://router.project-osrm.org/route/v1/${profile}/` +
-      `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
-      `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+    const directRoute = await fetchOsrmRouteForProfile(profile, start, stop, straightDistanceKm);
+    if (directRoute) {
+      return directRoute;
+    }
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
-        },
-        next: { revalidate: 600 },
-        signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
-      });
+    const snappedStart = await fetchNearestRoutablePoint(start, profile, straightDistanceKm);
+    const snappedStop = await fetchNearestRoutablePoint(stop, profile, straightDistanceKm);
 
-      if (!response.ok) {
-        continue;
-      }
-
-      const payload = (await response.json()) as OsrmResponse;
-      const bestRoute = payload.routes?.[0];
-
-      if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
-        continue;
-      }
-
-      return {
-        distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
-        points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
-      };
-    } catch {
+    if (!snappedStart || !snappedStop) {
       continue;
+    }
+
+    const snappedRoute = await fetchOsrmRouteForProfile(
+      profile,
+      snappedStart,
+      snappedStop,
+      straightDistanceKm
+    );
+
+    if (snappedRoute) {
+      return snappedRoute;
     }
   }
 
   return null;
+}
+
+async function fetchOsrmRouteForProfile(
+  profile: (typeof OSRM_PROFILES)[number],
+  start: RoutePoint,
+  stop: RoutePoint,
+  straightDistanceKm: number
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const url =
+    `https://router.project-osrm.org/route/v1/${profile}/` +
+    `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
+    `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+      },
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as OsrmResponse;
+    const bestRoute = payload.routes?.[0];
+
+    if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
+      return null;
+    }
+
+    return {
+      distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
+      points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchNearestRoutablePoint(
+  point: RoutePoint,
+  profile: (typeof OSRM_PROFILES)[number],
+  straightDistanceKm: number
+): Promise<RoutePoint | null> {
+  const url =
+    `https://router.project-osrm.org/nearest/v1/${profile}/` +
+    `${point.lon},${point.lat}?number=1`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+      },
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      waypoints?: Array<{ location?: [number, number] }>;
+    };
+    const location = payload.waypoints?.[0]?.location;
+
+    if (!location || location.length < 2) {
+      return null;
+    }
+
+    return {
+      lon: location[0],
+      lat: location[1]
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function analyzeUserRoute(
@@ -1428,31 +1480,29 @@ export async function analyzeUserRoute(
   stopLabel: string
 ): Promise<RouteTimeAnalysisResponse> {
   const outboundRoute = await fetchDirectedRoute(start, stop);
-  const hasOutboundRoute = Boolean(outboundRoute);
-  const fallbackOutboundDistanceKm = roundToOneDecimal(estimateDistanceKm(start, stop));
-  const outboundPoints = outboundRoute?.points || buildFallbackRoutePoints(start, stop);
-  const outboundDistanceKm = outboundRoute?.distanceKm || fallbackOutboundDistanceKm;
+
+  if (!outboundRoute) {
+    throw new Error("Fant ikke kjørbar rute mellom start og stopp.");
+  }
 
   const returnRoute = await fetchDirectedRoute(stop, start);
   const hasReturnRoute = Boolean(returnRoute);
   const roundTripPoints =
-    hasOutboundRoute && hasReturnRoute
-      ? [...outboundPoints, ...(returnRoute?.points.slice(1) || [])]
-      : outboundPoints;
+    hasReturnRoute
+      ? [...outboundRoute.points, ...(returnRoute?.points.slice(1) || [])]
+      : outboundRoute.points;
   const totalRoundTripDistanceKm = roundToOneDecimal(
-    outboundDistanceKm + (returnRoute?.distanceKm || 0)
+    outboundRoute.distanceKm + (returnRoute?.distanceKm || 0)
   );
   const route: Route = {
     id: "brukervalg",
     shortName: "Valgt rute",
-    description: hasOutboundRoute
-      ? hasReturnRoute
-        ? "Tur/retur langs vei mellom valgt start og stopp"
-        : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)"
-      : "Forenklet enveisrute (karttjeneste utilgjengelig akkurat nå)",
-    distanceKm: hasOutboundRoute && hasReturnRoute ? totalRoundTripDistanceKm : outboundDistanceKm,
-    oneWayDistanceKm: outboundDistanceKm,
-    isRoundTrip: hasOutboundRoute && hasReturnRoute,
+    description: hasReturnRoute
+      ? "Tur/retur langs vei mellom valgt start og stopp"
+      : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)",
+    distanceKm: hasReturnRoute ? totalRoundTripDistanceKm : outboundRoute.distanceKm,
+    oneWayDistanceKm: outboundRoute.distanceKm,
+    isRoundTrip: hasReturnRoute,
     startLabel,
     endLabel: stopLabel,
     points: roundTripPoints
