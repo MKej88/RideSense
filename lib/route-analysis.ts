@@ -1098,6 +1098,20 @@ function estimateDistanceKm(start: RoutePoint, end: RoutePoint): number {
   return Math.sqrt(latKm ** 2 + lonKm ** 2);
 }
 
+function buildFallbackRoutePoints(
+  start: RoutePoint,
+  stop: RoutePoint,
+  segments = 24
+): RoutePoint[] {
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const progress = index / segments;
+    return {
+      lat: start.lat + (stop.lat - start.lat) * progress,
+      lon: start.lon + (stop.lon - start.lon) * progress
+    };
+  });
+}
+
 function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }
@@ -1480,28 +1494,29 @@ export async function analyzeUserRoute(
   stopLabel: string
 ): Promise<RouteTimeAnalysisResponse> {
   const outboundRoute = await fetchDirectedRoute(start, stop);
-
-  if (!outboundRoute) {
-    throw new Error("Fant ikke kjørbar rute mellom start og stopp.");
-  }
+  const hasOutboundRoute = Boolean(outboundRoute);
+  const outboundPoints = outboundRoute?.points || buildFallbackRoutePoints(start, stop);
+  const outboundDistanceKm = outboundRoute?.distanceKm || roundToOneDecimal(estimateDistanceKm(start, stop));
 
   const returnRoute = await fetchDirectedRoute(stop, start);
-  const hasReturnRoute = Boolean(returnRoute);
+  const hasReturnRoute = hasOutboundRoute && Boolean(returnRoute);
   const roundTripPoints =
     hasReturnRoute
-      ? [...outboundRoute.points, ...(returnRoute?.points.slice(1) || [])]
-      : outboundRoute.points;
+      ? [...outboundPoints, ...(returnRoute?.points.slice(1) || [])]
+      : outboundPoints;
   const totalRoundTripDistanceKm = roundToOneDecimal(
-    outboundRoute.distanceKm + (returnRoute?.distanceKm || 0)
+    outboundDistanceKm + (returnRoute?.distanceKm || 0)
   );
   const route: Route = {
     id: "brukervalg",
     shortName: "Valgt rute",
-    description: hasReturnRoute
-      ? "Tur/retur langs vei mellom valgt start og stopp"
-      : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)",
-    distanceKm: hasReturnRoute ? totalRoundTripDistanceKm : outboundRoute.distanceKm,
-    oneWayDistanceKm: outboundRoute.distanceKm,
+    description: hasOutboundRoute
+      ? hasReturnRoute
+        ? "Tur/retur langs vei mellom valgt start og stopp"
+        : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)"
+      : "Enveisanalyse uten veigeometri (karttjeneste utilgjengelig akkurat nå)",
+    distanceKm: hasReturnRoute ? totalRoundTripDistanceKm : outboundDistanceKm,
+    oneWayDistanceKm: outboundDistanceKm,
     isRoundTrip: hasReturnRoute,
     startLabel,
     endLabel: stopLabel,

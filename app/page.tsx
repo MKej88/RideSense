@@ -1071,7 +1071,9 @@ export default function HomePage() {
               </div>
               {!routeAnalysis.route.isRoundTrip ? (
                 <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200">
-                  Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning.
+                  {routeAnalysis.route.description.includes("uten veigeometri")
+                    ? "Fant ikke kjørbar veigeometri nå. Analysen vises likevel, men ruten tegnes ikke på kartet før karttjenesten svarer."
+                    : "Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning."}
                 </p>
               ) : null}
 
@@ -1113,7 +1115,11 @@ export default function HomePage() {
           label={mapAnchor.name}
           onMarkerMoved={onMarkerMoved}
           routeName={routeAnalysis?.route.shortName || null}
-          routePoints={routeAnalysis?.route.points || []}
+          routePoints={
+            routeAnalysis?.route.description.includes("uten veigeometri")
+              ? []
+              : routeAnalysis?.route.points || []
+          }
         />
       )}
     </main>
