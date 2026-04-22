@@ -1531,31 +1531,63 @@ async function fetchVegvesenRoute(
 function buildVegvesenRequestCandidates(start: RoutePoint, stop: RoutePoint): URLSearchParams[] {
   const startUtm = latLonToUtm33(start);
   const stopUtm = latLonToUtm33(stop);
-
-  return [
-    new URLSearchParams({
-      stops: `${startUtm.easting},${startUtm.northing};${stopUtm.easting},${stopUtm.northing}`,
-      returnGeometry: "true",
-      format: "json",
-      route_type: "best"
-    }),
-    new URLSearchParams({
-      stops: `${start.lon},${start.lat};${stop.lon},${stop.lat}`,
-      returnGeometry: "true",
-      format: "json",
-      route_type: "best",
-      inSR: "4326",
-      outSR: "4326"
-    }),
-    new URLSearchParams({
-      stops: `${start.lat},${start.lon};${stop.lat},${stop.lon}`,
-      returnGeometry: "true",
-      format: "json",
-      route_type: "best",
-      inSR: "4326",
-      outSR: "4326"
-    })
+  const timestamp = formatRouteTimestamp(new Date());
+  const stopVariants = [
+    {
+      first: `${startUtm.easting},${startUtm.northing}`,
+      second: `${stopUtm.easting},${stopUtm.northing}`,
+      inSr: undefined,
+      outSr: undefined
+    },
+    {
+      first: `${start.lon},${start.lat}`,
+      second: `${stop.lon},${stop.lat}`,
+      inSr: "4326",
+      outSr: "4326"
+    },
+    {
+      first: `${start.lat},${start.lon}`,
+      second: `${stop.lat},${stop.lon}`,
+      inSr: "4326",
+      outSr: "4326"
+    }
   ];
+  const separators = [";", "|"];
+  const candidates: URLSearchParams[] = [];
+
+  for (const variant of stopVariants) {
+    for (const separator of separators) {
+      const params = new URLSearchParams({
+        stops: `${variant.first}${separator}${variant.second}`,
+        returnGeometry: "true",
+        format: "json",
+        route_type: "best",
+        st: timestamp
+      });
+
+      if (variant.inSr) {
+        params.set("inSR", variant.inSr);
+      }
+
+      if (variant.outSr) {
+        params.set("outSR", variant.outSr);
+      }
+
+      candidates.push(params);
+    }
+  }
+
+  return candidates;
+}
+
+function formatRouteTimestamp(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  const seconds = String(value.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
 }
 
 function isLikelyLonLat(x: number, y: number): boolean {
