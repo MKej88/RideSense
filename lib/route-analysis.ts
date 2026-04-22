@@ -1502,26 +1502,17 @@ async function fetchVegvesenRoute(
       return null;
     }
 
-    const payload = (await response.json()) as {
-      routes?: {
-        features?: Array<{
-          attributes?: { Total_Meters?: number };
-          geometry?: { paths?: number[][][] };
-        }>;
-      };
-    };
-    const feature = payload.routes?.features?.[0];
-    const rawPath = feature?.geometry?.paths?.[0];
+    const payload = (await response.json()) as Record<string, unknown>;
+    const routeData = extractVegvesenRouteData(payload);
 
-    if (!rawPath || rawPath.length < 2) {
+    if (!routeData || routeData.rawCoordinates.length < 2) {
       return null;
     }
 
-    const points = rawPath.map((coordinatePair) => {
-      const [easting, northing] = coordinatePair;
-      return utm33ToLatLon(easting, northing);
-    });
-    const distanceMeters = feature?.attributes?.Total_Meters;
+    const points = routeData.rawCoordinates.map(([x, y]) =>
+      isLikelyLonLat(x, y) ? { lon: x, lat: y } : utm33ToLatLon(x, y)
+    );
+    const distanceMeters = routeData.distanceMeters;
     const distanceKm = Number.isFinite(distanceMeters)
       ? roundToOneDecimal((distanceMeters as number) / 1000)
       : roundToOneDecimal(estimateDistanceKm(start, stop) * 1.3);
@@ -1533,6 +1524,136 @@ async function fetchVegvesenRoute(
   } catch {
     return null;
   }
+}
+
+function isLikelyLonLat(x: number, y: number): boolean {
+  return Math.abs(x) <= 180 && Math.abs(y) <= 90;
+}
+
+function extractVegvesenRouteData(
+  payload: Record<string, unknown>
+): { rawCoordinates: Array<[number, number]>; distanceMeters?: number } | null {
+  const candidates: Array<Record<string, unknown>> = [];
+  const routesObject = payload.routes as Record<string, unknown> | undefined;
+  const routesFeatures = routesObject?.features;
+
+  if (Array.isArray(routesFeatures)) {
+    routesFeatures.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  if (Array.isArray(payload.routes)) {
+    payload.routes.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  if (Array.isArray(payload.features)) {
+    payload.features.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  for (const candidate of candidates) {
+    const geometry = candidate.geometry as Record<string, unknown> | undefined;
+    const attributes = candidate.attributes as Record<string, unknown> | undefined;
+    const rawCoordinates = extractRawCoordinatesFromGeometry(geometry);
+
+    if (rawCoordinates.length < 2) {
+      continue;
+    }
+
+    const distanceMetersCandidate =
+      toFiniteNumber(attributes?.Total_Meters) ||
+      toFiniteNumber(attributes?.total_meters) ||
+      toFiniteNumber(attributes?.Shape_Length);
+
+    return {
+      rawCoordinates,
+      distanceMeters: distanceMetersCandidate
+    };
+  }
+
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function extractRawCoordinatesFromGeometry(
+  geometry?: Record<string, unknown>
+): Array<[number, number]> {
+  if (!geometry) {
+    return [];
+  }
+
+  const paths = geometry.paths;
+  if (Array.isArray(paths) && Array.isArray(paths[0])) {
+    const firstPath = paths[0];
+    const coordinates = firstPath
+      .map((entry) => {
+        if (!Array.isArray(entry) || entry.length < 2) {
+          return null;
+        }
+        const x = toFiniteNumber(entry[0]);
+        const y = toFiniteNumber(entry[1]);
+        if (x === undefined || y === undefined) {
+          return null;
+        }
+        return [x, y] as [number, number];
+      })
+      .filter((entry): entry is [number, number] => Boolean(entry));
+
+    if (coordinates.length > 0) {
+      return coordinates;
+    }
+  }
+
+  const coordinates = geometry.coordinates;
+  if (Array.isArray(coordinates)) {
+    const flattened =
+      Array.isArray(coordinates[0]) && Array.isArray((coordinates[0] as unknown[])[0])
+        ? (coordinates[0] as unknown[])
+        : coordinates;
+    const parsed = flattened
+      .map((entry) => {
+        if (!Array.isArray(entry) || entry.length < 2) {
+          return null;
+        }
+        const x = toFiniteNumber(entry[0]);
+        const y = toFiniteNumber(entry[1]);
+        if (x === undefined || y === undefined) {
+          return null;
+        }
+        return [x, y] as [number, number];
+      })
+      .filter((entry): entry is [number, number] => Boolean(entry));
+
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  }
+
+  return [];
 }
 
 export async function analyzeUserRoute(
