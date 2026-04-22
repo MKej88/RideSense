@@ -1098,6 +1098,98 @@ function estimateDistanceKm(start: RoutePoint, end: RoutePoint): number {
   return Math.sqrt(latKm ** 2 + lonKm ** 2);
 }
 
+function latLonToUtm33(point: RoutePoint): { easting: number; northing: number } {
+  const a = 6378137;
+  const f = 1 / 298.257223563;
+  const k0 = 0.9996;
+  const e2 = f * (2 - f);
+  const ep2 = e2 / (1 - e2);
+  const zoneCentralMeridianDegrees = 15;
+  const latRadians = (point.lat * Math.PI) / 180;
+  const lonRadians = (point.lon * Math.PI) / 180;
+  const lon0Radians = (zoneCentralMeridianDegrees * Math.PI) / 180;
+  const sinLat = Math.sin(latRadians);
+  const cosLat = Math.cos(latRadians);
+  const tanLat = Math.tan(latRadians);
+  const n = a / Math.sqrt(1 - e2 * sinLat ** 2);
+  const t = tanLat ** 2;
+  const c = ep2 * cosLat ** 2;
+  const aTerm = cosLat * (lonRadians - lon0Radians);
+  const m =
+    a *
+    ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * latRadians -
+      ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) *
+        Math.sin(2 * latRadians) +
+      ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * latRadians) -
+      ((35 * e2 ** 3) / 3072) * Math.sin(6 * latRadians));
+
+  const easting =
+    k0 *
+      n *
+      (aTerm +
+        ((1 - t + c) * aTerm ** 3) / 6 +
+        ((5 - 18 * t + t ** 2 + 72 * c - 58 * ep2) * aTerm ** 5) / 120) +
+    500000;
+  const northing =
+    k0 *
+    (m +
+      n *
+        tanLat *
+        ((aTerm ** 2) / 2 +
+          ((5 - t + 9 * c + 4 * c ** 2) * aTerm ** 4) / 24 +
+          ((61 - 58 * t + t ** 2 + 600 * c - 330 * ep2) * aTerm ** 6) / 720));
+
+  return { easting, northing };
+}
+
+function utm33ToLatLon(easting: number, northing: number): RoutePoint {
+  const a = 6378137;
+  const f = 1 / 298.257223563;
+  const k0 = 0.9996;
+  const e2 = f * (2 - f);
+  const ep2 = e2 / (1 - e2);
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const zoneCentralMeridianDegrees = 15;
+  const x = easting - 500000;
+  const y = northing;
+  const m = y / k0;
+  const mu =
+    m /
+    (a * (1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256));
+  const phi1 =
+    mu +
+    ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) +
+    ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const sinPhi1 = Math.sin(phi1);
+  const cosPhi1 = Math.cos(phi1);
+  const tanPhi1 = Math.tan(phi1);
+  const n1 = a / Math.sqrt(1 - e2 * sinPhi1 ** 2);
+  const r1 = (a * (1 - e2)) / (1 - e2 * sinPhi1 ** 2) ** 1.5;
+  const t1 = tanPhi1 ** 2;
+  const c1 = ep2 * cosPhi1 ** 2;
+  const d = x / (n1 * k0);
+  const latRadians =
+    phi1 -
+    ((n1 * tanPhi1) / r1) *
+      (d ** 2 / 2 -
+        ((5 + 3 * t1 + 10 * c1 - 4 * c1 ** 2 - 9 * ep2) * d ** 4) / 24 +
+        ((61 + 90 * t1 + 298 * c1 + 45 * t1 ** 2 - 252 * ep2 - 3 * c1 ** 2) * d ** 6) /
+          720);
+  const lonRadians =
+    ((d -
+      ((1 + 2 * t1 + c1) * d ** 3) / 6 +
+      ((5 - 2 * c1 + 28 * t1 - 3 * c1 ** 2 + 8 * ep2 + 24 * t1 ** 2) * d ** 5) / 120) /
+      cosPhi1) +
+    (zoneCentralMeridianDegrees * Math.PI) / 180;
+
+  return {
+    lat: (latRadians * 180) / Math.PI,
+    lon: (lonRadians * 180) / Math.PI
+  };
+}
+
 function buildFallbackRoutePoints(
   start: RoutePoint,
   stop: RoutePoint,
@@ -1404,7 +1496,75 @@ async function fetchDirectedRoute(
     }
   }
 
+  const vegvesenRoute = await fetchVegvesenRoute(start, stop);
+  if (vegvesenRoute) {
+    return vegvesenRoute;
+  }
+
   return null;
+}
+
+async function fetchVegvesenRoute(
+  start: RoutePoint,
+  stop: RoutePoint
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const startUtm = latLonToUtm33(start);
+  const stopUtm = latLonToUtm33(stop);
+  const stops = `${startUtm.easting},${startUtm.northing};${stopUtm.easting},${stopUtm.northing}`;
+  const params = new URLSearchParams({
+    stops,
+    returnGeometry: "true",
+    format: "json",
+    route_type: "best"
+  });
+  const url =
+    "https://www.vegvesen.no/ws/no/vegvesen/ruteplan/routingService_v1_0/routingService?" +
+    params.toString();
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+      },
+      next: { revalidate: 600 },
+      signal: AbortSignal.timeout(20000)
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      routes?: {
+        features?: Array<{
+          attributes?: { Total_Meters?: number };
+          geometry?: { paths?: number[][][] };
+        }>;
+      };
+    };
+    const feature = payload.routes?.features?.[0];
+    const rawPath = feature?.geometry?.paths?.[0];
+
+    if (!rawPath || rawPath.length < 2) {
+      return null;
+    }
+
+    const points = rawPath.map((coordinatePair) => {
+      const [easting, northing] = coordinatePair;
+      return utm33ToLatLon(easting, northing);
+    });
+    const distanceMeters = feature?.attributes?.Total_Meters;
+    const distanceKm = Number.isFinite(distanceMeters)
+      ? roundToOneDecimal((distanceMeters as number) / 1000)
+      : roundToOneDecimal(estimateDistanceKm(start, stop) * 1.3);
+
+    return {
+      distanceKm,
+      points
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchOsrmRouteForProfile(
