@@ -1415,6 +1415,33 @@ function buildRouteWeatherHour(
   };
 }
 
+function buildSharedRouteHourTimestamps(
+  forecasts: Awaited<ReturnType<typeof fetchForecastForLocation>>[]
+): string[] {
+  if (forecasts.length === 0) {
+    return [];
+  }
+
+  const timestampCounts = new Map<string, number>();
+
+  forecasts.forEach((forecast) => {
+    const uniqueTimestamps = new Set(
+      forecast.hours
+        .map((hour) => hour?.time)
+        .filter((time): time is string => typeof time === "string" && time.length > 0)
+    );
+
+    uniqueTimestamps.forEach((time) => {
+      timestampCounts.set(time, (timestampCounts.get(time) || 0) + 1);
+    });
+  });
+
+  return Array.from(timestampCounts.entries())
+    .filter(([, count]) => count === forecasts.length)
+    .map(([time]) => time)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+}
+
 function getNextHourTimestamp(nowMs: number): number {
   const oneHourMs = 60 * 60 * 1000;
   return Math.floor(nowMs / oneHourMs) * oneHourMs + oneHourMs;
@@ -1889,17 +1916,34 @@ export async function analyzeUserRoute(
     )
   );
 
-  const hourCount = Math.min(...forecasts.map((forecast) => forecast.hours.length));
-
-  if (hourCount === 0) {
+  const sharedHourTimestamps = buildSharedRouteHourTimestamps(forecasts);
+  if (sharedHourTimestamps.length === 0) {
     throw new Error("Fant ikke nok værdata for ruten.");
   }
 
   const routeDirectionSegments = buildRouteDirectionSegments(route.points, sampledPoints);
-  const routeHours: RouteWindHour[] = Array.from({ length: hourCount }, (_, hourIndex) => {
-    const hourlySamples = forecasts.map((forecast) => forecast.hours[hourIndex]);
-    return buildRouteWeatherHour(hourlySamples, routeDirectionSegments);
-  });
+  const forecastHoursByTimestamp = forecasts.map(
+    (forecast) => new Map(forecast.hours.map((hour) => [hour.time, hour]))
+  );
+  const routeHours: RouteWindHour[] = sharedHourTimestamps
+    .map((timestamp) => {
+      const hourlySamples = forecastHoursByTimestamp.map((forecastHours) =>
+        forecastHours.get(timestamp)
+      );
+      const missingSample = hourlySamples.some((hour) => !hour);
+      if (missingSample) {
+        return null;
+      }
+      return buildRouteWeatherHour(
+        hourlySamples as Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
+        routeDirectionSegments
+      );
+    })
+    .filter((hour): hour is RouteWindHour => Boolean(hour));
+
+  if (routeHours.length === 0) {
+    throw new Error("Fant ikke nok værdata for ruten.");
+  }
 
   const analysisRunMs = Date.now();
 
