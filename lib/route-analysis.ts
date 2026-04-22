@@ -109,6 +109,7 @@ const GEONORGE_PLACE_FETCH_TIMEOUT_MS = 3500;
 const GEONORGE_PLACE_URL = "https://ws.geonorge.no/stedsnavn/v1/punkt";
 const LONG_ROUTE_THRESHOLD_KM = 80;
 const DESIRED_ROUTED_CANDIDATES = 6;
+const DIRECTED_ROUTE_PROBING_BUDGET_MS = 45000;
 
 export async function analyzePredefinedRoutes(
   lat: number,
@@ -1476,9 +1477,15 @@ async function fetchDirectedRoute(
   const startCandidates = buildNearbyRoutingCandidates(start);
   const stopCandidates = buildNearbyRoutingCandidates(stop);
   const triedPairs = new Set<string>();
+  const deadlineTs = Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS;
 
   for (const startCandidate of startCandidates) {
     for (const stopCandidate of stopCandidates) {
+      const remainingTimeMs = deadlineTs - Date.now();
+      if (remainingTimeMs <= 0) {
+        return null;
+      }
+
       const pairKey = `${toRoutingCandidateKey(startCandidate.lat)}:${toRoutingCandidateKey(startCandidate.lon)}|${toRoutingCandidateKey(stopCandidate.lat)}:${toRoutingCandidateKey(stopCandidate.lon)}`;
 
       if (triedPairs.has(pairKey)) {
@@ -1487,12 +1494,16 @@ async function fetchDirectedRoute(
 
       triedPairs.add(pairKey);
 
-      const vegvesenRoute = await fetchVegvesenRoute(startCandidate, stopCandidate);
+      const vegvesenRoute = await fetchVegvesenRoute(
+        startCandidate,
+        stopCandidate,
+        deadlineTs
+      );
       if (vegvesenRoute) {
         return vegvesenRoute;
       }
 
-      const osrmRoute = await fetchOsrmFallbackRoute(startCandidate, stopCandidate);
+      const osrmRoute = await fetchOsrmFallbackRoute(startCandidate, stopCandidate, deadlineTs);
       if (osrmRoute) {
         return osrmRoute;
       }
@@ -1504,11 +1515,19 @@ async function fetchDirectedRoute(
 
 async function fetchVegvesenRoute(
   start: RoutePoint,
-  stop: RoutePoint
+  stop: RoutePoint,
+  deadlineTs?: number
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
   const requestCandidates = buildVegvesenRequestCandidates(start, stop);
 
   for (const params of requestCandidates) {
+    const remainingTimeMs =
+      deadlineTs === undefined ? Number.POSITIVE_INFINITY : deadlineTs - Date.now();
+
+    if (remainingTimeMs <= 0) {
+      return null;
+    }
+
     const url =
       "https://www.vegvesen.no/ws/no/vegvesen/ruteplan/routingService_v1_0/routingService?" +
       params.toString();
@@ -1519,7 +1538,7 @@ async function fetchVegvesenRoute(
           "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
         },
         next: { revalidate: 600 },
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(Math.max(1, Math.min(20000, remainingTimeMs)))
       });
 
       if (!response.ok) {
@@ -1761,12 +1780,20 @@ function extractRawCoordinatesFromGeometry(
 
 async function fetchOsrmFallbackRoute(
   start: RoutePoint,
-  stop: RoutePoint
+  stop: RoutePoint,
+  deadlineTs?: number
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
   const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
   const profiles = ["driving", "bicycle", "foot"];
 
   for (const profile of profiles) {
+    const remainingTimeMs =
+      deadlineTs === undefined ? Number.POSITIVE_INFINITY : deadlineTs - Date.now();
+
+    if (remainingTimeMs <= 0) {
+      return null;
+    }
+
     const url =
       `https://router.project-osrm.org/route/v1/${profile}/` +
       `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
@@ -1778,7 +1805,9 @@ async function fetchOsrmFallbackRoute(
           "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
         },
         next: { revalidate: 600 },
-        signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
+        signal: AbortSignal.timeout(
+          Math.max(1, Math.min(getOsrmFetchTimeoutMs(straightDistanceKm), remainingTimeMs))
+        )
       });
 
       if (!response.ok) {
@@ -1815,7 +1844,7 @@ export async function analyzeUserRoute(
   const outboundPoints = outboundRoute?.points || buildFallbackRoutePoints(start, stop);
   const outboundDistanceKm = outboundRoute?.distanceKm || roundToOneDecimal(estimateDistanceKm(start, stop));
 
-  const returnRoute = await fetchDirectedRoute(stop, start);
+  const returnRoute = hasOutboundRoute ? await fetchDirectedRoute(stop, start) : null;
   const hasReturnRoute = hasOutboundRoute && Boolean(returnRoute);
   const roundTripPoints =
     hasReturnRoute
