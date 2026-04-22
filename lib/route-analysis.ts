@@ -110,6 +110,7 @@ const GEONORGE_PLACE_URL = "https://ws.geonorge.no/stedsnavn/v1/punkt";
 const LONG_ROUTE_THRESHOLD_KM = 80;
 const DESIRED_ROUTED_CANDIDATES = 6;
 const DIRECTED_ROUTE_PROBING_BUDGET_MS = 45000;
+const MIN_REMAINING_MS_FOR_RETURN_PROBE_MS = 1500;
 
 export async function analyzePredefinedRoutes(
   lat: number,
@@ -1472,16 +1473,18 @@ function toRoutingCandidateKey(value: number): string {
 
 async function fetchDirectedRoute(
   start: RoutePoint,
-  stop: RoutePoint
+  stop: RoutePoint,
+  deadlineTs?: number
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
   const startCandidates = buildNearbyRoutingCandidates(start);
   const stopCandidates = buildNearbyRoutingCandidates(stop);
   const triedPairs = new Set<string>();
-  const deadlineTs = Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS;
+  const effectiveDeadlineTs =
+    deadlineTs === undefined ? Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS : deadlineTs;
 
   for (const startCandidate of startCandidates) {
     for (const stopCandidate of stopCandidates) {
-      const remainingTimeMs = deadlineTs - Date.now();
+      const remainingTimeMs = effectiveDeadlineTs - Date.now();
       if (remainingTimeMs <= 0) {
         return null;
       }
@@ -1497,13 +1500,17 @@ async function fetchDirectedRoute(
       const vegvesenRoute = await fetchVegvesenRoute(
         startCandidate,
         stopCandidate,
-        deadlineTs
+        effectiveDeadlineTs
       );
       if (vegvesenRoute) {
         return vegvesenRoute;
       }
 
-      const osrmRoute = await fetchOsrmFallbackRoute(startCandidate, stopCandidate, deadlineTs);
+      const osrmRoute = await fetchOsrmFallbackRoute(
+        startCandidate,
+        stopCandidate,
+        effectiveDeadlineTs
+      );
       if (osrmRoute) {
         return osrmRoute;
       }
@@ -1839,12 +1846,18 @@ export async function analyzeUserRoute(
   startLabel: string,
   stopLabel: string
 ): Promise<RouteTimeAnalysisResponse> {
-  const outboundRoute = await fetchDirectedRoute(start, stop);
+  const directedRouteDeadlineTs = Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS;
+  const outboundRoute = await fetchDirectedRoute(start, stop, directedRouteDeadlineTs);
   const hasOutboundRoute = Boolean(outboundRoute);
   const outboundPoints = outboundRoute?.points || buildFallbackRoutePoints(start, stop);
   const outboundDistanceKm = outboundRoute?.distanceKm || roundToOneDecimal(estimateDistanceKm(start, stop));
 
-  const returnRoute = hasOutboundRoute ? await fetchDirectedRoute(stop, start) : null;
+  const remainingDirectedRouteTimeMs = directedRouteDeadlineTs - Date.now();
+  const shouldProbeReturnRoute =
+    hasOutboundRoute && remainingDirectedRouteTimeMs >= MIN_REMAINING_MS_FOR_RETURN_PROBE_MS;
+  const returnRoute = shouldProbeReturnRoute
+    ? await fetchDirectedRoute(stop, start, directedRouteDeadlineTs)
+    : null;
   const hasReturnRoute = hasOutboundRoute && Boolean(returnRoute);
   const roundTripPoints =
     hasReturnRoute
