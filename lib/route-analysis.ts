@@ -1469,7 +1469,12 @@ async function fetchDirectedRoute(
   start: RoutePoint,
   stop: RoutePoint
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
-  return fetchVegvesenRoute(start, stop);
+  const vegvesenRoute = await fetchVegvesenRoute(start, stop);
+  if (vegvesenRoute) {
+    return vegvesenRoute;
+  }
+
+  return fetchOsrmFallbackRoute(start, stop);
 }
 
 async function fetchVegvesenRoute(
@@ -1654,6 +1659,51 @@ function extractRawCoordinatesFromGeometry(
   }
 
   return [];
+}
+
+async function fetchOsrmFallbackRoute(
+  start: RoutePoint,
+  stop: RoutePoint
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
+  const profiles = ["driving", "bicycle", "foot"];
+
+  for (const profile of profiles) {
+    const url =
+      `https://router.project-osrm.org/route/v1/${profile}/` +
+      `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
+      `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+        },
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(getOsrmFetchTimeoutMs(straightDistanceKm))
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as OsrmResponse;
+      const bestRoute = payload.routes?.[0];
+
+      if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
+        continue;
+      }
+
+      return {
+        distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
+        points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 export async function analyzeUserRoute(
