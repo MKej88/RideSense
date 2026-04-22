@@ -103,7 +103,7 @@ const OSRM_FETCH_TIMEOUT_MS = 4000;
 const OVERPASS_QUERY_TIMEOUT_SECONDS = 8;
 const ROUTE_MATCH_TOLERANCE_KM = 0.5;
 const ROUTE_SEARCH_ATTEMPTS = 5;
-const OSRM_PROFILES = ["bicycle", "driving"] as const;
+const OSRM_PROFILES = ["bicycle", "cycling", "driving", "foot", "walking"] as const;
 const ROUTE_BUILD_CONCURRENCY = 4;
 const GEONORGE_PLACE_FETCH_TIMEOUT_MS = 3500;
 const GEONORGE_PLACE_URL = "https://ws.geonorge.no/stedsnavn/v1/punkt";
@@ -914,7 +914,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getOsrmFetchTimeoutMs(straightDistanceKm: number): number {
-  return Math.min(12000, Math.max(OSRM_FETCH_TIMEOUT_MS, 3500 + straightDistanceKm * 90));
+  return Math.min(25000, Math.max(OSRM_FETCH_TIMEOUT_MS, 5000 + straightDistanceKm * 140));
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
