@@ -41,6 +41,12 @@ interface GeonorgeAddressResponse {
   adresser?: GeonorgeAddressResult[];
 }
 
+interface ParsedStreetQuery {
+  streetName: string;
+  houseNumber?: string;
+  houseLetter?: string;
+}
+
 function parseOptionalNumber(value: string | null): number | undefined {
   if (value === null) {
     return undefined;
@@ -79,31 +85,43 @@ async function searchNominatimVariants(
 
 async function searchGeonorgeAddresses(
   query: string,
-  context: string,
+  context?: string,
   limit = 10,
   nearLat?: number,
   nearLon?: number
 ): Promise<GeocodeResult[]> {
+  const parsedStreetQuery = parseStreetQuery(query);
   const searches = [
     fetchGeonorgeAddresses({
       adressenavn: query,
-      kommunenavn: context,
+      ...(context ? { kommunenavn: context } : {}),
       fuzzy: "true",
       treffPerSide: String(limit),
       side: "0"
     }),
     fetchGeonorgeAddresses({
-      sok: `${query} ${context}`,
+      sok: context ? `${query} ${context}` : query,
       fuzzy: "true",
       treffPerSide: String(limit),
       side: "0"
     }),
-    fetchGeonorgeAddresses({
-      sok: query,
-      fuzzy: "true",
-      treffPerSide: String(limit),
-      side: "0"
-    })
+    ...(parsedStreetQuery
+      ? [
+          fetchGeonorgeAddresses({
+            adressenavn: parsedStreetQuery.streetName,
+            ...(parsedStreetQuery.houseNumber
+              ? { nummer: parsedStreetQuery.houseNumber }
+              : {}),
+            ...(parsedStreetQuery.houseLetter
+              ? { bokstav: parsedStreetQuery.houseLetter }
+              : {}),
+            ...(context ? { kommunenavn: context } : {}),
+            fuzzy: "true",
+            treffPerSide: String(limit),
+            side: "0"
+          })
+        ]
+      : [])
   ];
 
   const settled = await Promise.allSettled(searches);
@@ -138,7 +156,7 @@ async function searchGeonorgeAddresses(
         Number.isFinite(item.lat) &&
         Number.isFinite(item.lon) &&
         item.name.length > 0 &&
-        matchesSelectedPlace(item, context, nearLat, nearLon)
+        (!context || matchesSelectedPlace(item, context, nearLat, nearLon))
     )
     .sort((left, right) => {
       if (nearLat === undefined || nearLon === undefined) {
@@ -231,6 +249,75 @@ function normalizeText(value?: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .toLocaleLowerCase("nb-NO");
+}
+
+function parseStreetQuery(query: string): ParsedStreetQuery | null {
+  const trimmed = query.trim();
+
+  if (trimmed.length < 2) {
+    return null;
+  }
+
+  const addressMatch = trimmed.match(/^(.+?)\s+(\d+)([a-zA-Z]?)$/u);
+
+  if (!addressMatch) {
+    return null;
+  }
+
+  const [, streetName, houseNumber, houseLetter] = addressMatch;
+
+  return {
+    streetName: streetName.trim(),
+    houseNumber,
+    houseLetter: houseLetter ? houseLetter.toUpperCase() : undefined
+  };
+}
+
+function mergeGeocodeResults(
+  addressResults: GeocodeResult[],
+  placeResults: GeocodeResult[],
+  limit: number
+): GeocodeResult[] {
+  const seen = new Set<string>();
+  const merged: GeocodeResult[] = [];
+  let addressIndex = 0;
+  let placeIndex = 0;
+
+  const appendNextUnique = (results: GeocodeResult[], startIndex: number): number => {
+    let currentIndex = startIndex;
+
+    while (currentIndex < results.length) {
+      const result = results[currentIndex];
+      const key = `${result.name}|${result.lat}|${result.lon}`;
+      currentIndex += 1;
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      merged.push(result);
+      return currentIndex;
+    }
+
+    return currentIndex;
+  };
+
+  while (merged.length < limit && (addressIndex < addressResults.length || placeIndex < placeResults.length)) {
+    if (addressIndex < addressResults.length) {
+      addressIndex = appendNextUnique(addressResults, addressIndex);
+    }
+
+    if (merged.length >= limit) {
+      break;
+    }
+
+    if (placeIndex < placeResults.length) {
+      placeIndex = appendNextUnique(placeResults, placeIndex);
+    }
+  }
+
+  return merged.slice(0, limit);
 }
 
 function toDisplayCase(value?: string): string {
@@ -409,13 +496,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const results = await searchNominatimVariants(
-      query,
-      context,
-      context ? 10 : 6,
-      nearLat,
-      nearLon
-    );
+    const [addressSearchResult, placeSearchResult] = await Promise.allSettled([
+      searchGeonorgeAddresses(query, undefined, 8, nearLat, nearLon),
+      searchNominatimVariants(query, context, context ? 10 : 6, nearLat, nearLon)
+    ]);
+    const addressResults =
+      addressSearchResult.status === "fulfilled" ? addressSearchResult.value : [];
+    const placeResults = placeSearchResult.status === "fulfilled" ? placeSearchResult.value : [];
+
+    if (addressResults.length === 0 && placeResults.length === 0) {
+      throw new Error("Ingen treff fra stedsøk.");
+    }
+
+    const results = mergeGeocodeResults(addressResults, placeResults, 10);
+
     return NextResponse.json(
       { results },
       {

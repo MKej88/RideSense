@@ -43,6 +43,7 @@ export interface ScoredWeatherHour extends WeatherHourRaw {
   score: number;
   scoreLabel: ScoreLabel;
   scoreReasons: string[];
+  tailwindMs?: number;
   dataBasis: WeatherDataBasis;
   confidence: DataConfidence;
 }
@@ -120,4 +121,28 @@ export interface RouteAnalysisResponse {
   routes: RouteAnalysis[];
   bestRouteId: string | null;
   bestRouteExplanation: string | null;
+}
+
+
+export interface RouteWindHour {
+  time: string;
+  score: number;
+  scoreLabel: ScoreLabel;
+  windSpeed: number;
+  cloudCoverPercent: number;
+  symbolCode?: string;
+  windFromDirection?: number;
+  windGust?: number;
+  precipitationAmount: number;
+  airTemperature: number;
+  tailwindMs: number;
+}
+
+export interface RouteTimeAnalysisResponse {
+  analyzedAt: string;
+  route: Route;
+  sampledPoints: RouteSamplePoint[];
+  hours: RouteWindHour[];
+  bestWindowNext24h: BestWindow | null;
+  bestWindowNext7d: BestWindow | null;
 }

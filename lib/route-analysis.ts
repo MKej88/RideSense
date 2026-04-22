@@ -6,7 +6,9 @@ import {
   RouteAnalysis,
   RouteAnalysisResponse,
   RoutePoint,
-  RouteSamplePoint
+  RouteSamplePoint,
+  RouteTimeAnalysisResponse,
+  RouteWindHour
 } from "@/lib/types";
 
 interface RouteProfile {
@@ -101,12 +103,14 @@ const OSRM_FETCH_TIMEOUT_MS = 4000;
 const OVERPASS_QUERY_TIMEOUT_SECONDS = 8;
 const ROUTE_MATCH_TOLERANCE_KM = 0.5;
 const ROUTE_SEARCH_ATTEMPTS = 5;
-const OSRM_PROFILES = ["bicycle", "driving"] as const;
+const OSRM_PROFILES = ["bicycle", "cycling", "driving", "foot", "walking"] as const;
 const ROUTE_BUILD_CONCURRENCY = 4;
 const GEONORGE_PLACE_FETCH_TIMEOUT_MS = 3500;
 const GEONORGE_PLACE_URL = "https://ws.geonorge.no/stedsnavn/v1/punkt";
 const LONG_ROUTE_THRESHOLD_KM = 80;
 const DESIRED_ROUTED_CANDIDATES = 6;
+const DIRECTED_ROUTE_PROBING_BUDGET_MS = 45000;
+const MIN_REMAINING_MS_FOR_RETURN_PROBE_MS = 1500;
 
 export async function analyzePredefinedRoutes(
   lat: number,
@@ -912,7 +916,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getOsrmFetchTimeoutMs(straightDistanceKm: number): number {
-  return Math.min(12000, Math.max(OSRM_FETCH_TIMEOUT_MS, 3500 + straightDistanceKm * 90));
+  return Math.min(25000, Math.max(OSRM_FETCH_TIMEOUT_MS, 5000 + straightDistanceKm * 140));
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -1096,6 +1100,859 @@ function estimateDistanceKm(start: RoutePoint, end: RoutePoint): number {
   return Math.sqrt(latKm ** 2 + lonKm ** 2);
 }
 
+function latLonToUtm33(point: RoutePoint): { easting: number; northing: number } {
+  const a = 6378137;
+  const f = 1 / 298.257223563;
+  const k0 = 0.9996;
+  const e2 = f * (2 - f);
+  const ep2 = e2 / (1 - e2);
+  const zoneCentralMeridianDegrees = 15;
+  const latRadians = (point.lat * Math.PI) / 180;
+  const lonRadians = (point.lon * Math.PI) / 180;
+  const lon0Radians = (zoneCentralMeridianDegrees * Math.PI) / 180;
+  const sinLat = Math.sin(latRadians);
+  const cosLat = Math.cos(latRadians);
+  const tanLat = Math.tan(latRadians);
+  const n = a / Math.sqrt(1 - e2 * sinLat ** 2);
+  const t = tanLat ** 2;
+  const c = ep2 * cosLat ** 2;
+  const aTerm = cosLat * (lonRadians - lon0Radians);
+  const m =
+    a *
+    ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * latRadians -
+      ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) *
+        Math.sin(2 * latRadians) +
+      ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * latRadians) -
+      ((35 * e2 ** 3) / 3072) * Math.sin(6 * latRadians));
+
+  const easting =
+    k0 *
+      n *
+      (aTerm +
+        ((1 - t + c) * aTerm ** 3) / 6 +
+        ((5 - 18 * t + t ** 2 + 72 * c - 58 * ep2) * aTerm ** 5) / 120) +
+    500000;
+  const northing =
+    k0 *
+    (m +
+      n *
+        tanLat *
+        ((aTerm ** 2) / 2 +
+          ((5 - t + 9 * c + 4 * c ** 2) * aTerm ** 4) / 24 +
+          ((61 - 58 * t + t ** 2 + 600 * c - 330 * ep2) * aTerm ** 6) / 720));
+
+  return { easting, northing };
+}
+
+function utm33ToLatLon(easting: number, northing: number): RoutePoint {
+  const a = 6378137;
+  const f = 1 / 298.257223563;
+  const k0 = 0.9996;
+  const e2 = f * (2 - f);
+  const ep2 = e2 / (1 - e2);
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const zoneCentralMeridianDegrees = 15;
+  const x = easting - 500000;
+  const y = northing;
+  const m = y / k0;
+  const mu =
+    m /
+    (a * (1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256));
+  const phi1 =
+    mu +
+    ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) +
+    ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const sinPhi1 = Math.sin(phi1);
+  const cosPhi1 = Math.cos(phi1);
+  const tanPhi1 = Math.tan(phi1);
+  const n1 = a / Math.sqrt(1 - e2 * sinPhi1 ** 2);
+  const r1 = (a * (1 - e2)) / (1 - e2 * sinPhi1 ** 2) ** 1.5;
+  const t1 = tanPhi1 ** 2;
+  const c1 = ep2 * cosPhi1 ** 2;
+  const d = x / (n1 * k0);
+  const latRadians =
+    phi1 -
+    ((n1 * tanPhi1) / r1) *
+      (d ** 2 / 2 -
+        ((5 + 3 * t1 + 10 * c1 - 4 * c1 ** 2 - 9 * ep2) * d ** 4) / 24 +
+        ((61 + 90 * t1 + 298 * c1 + 45 * t1 ** 2 - 252 * ep2 - 3 * c1 ** 2) * d ** 6) /
+          720);
+  const lonRadians =
+    ((d -
+      ((1 + 2 * t1 + c1) * d ** 3) / 6 +
+      ((5 - 2 * c1 + 28 * t1 - 3 * c1 ** 2 + 8 * ep2 + 24 * t1 ** 2) * d ** 5) / 120) /
+      cosPhi1) +
+    (zoneCentralMeridianDegrees * Math.PI) / 180;
+
+  return {
+    lat: (latRadians * 180) / Math.PI,
+    lon: (lonRadians * 180) / Math.PI
+  };
+}
+
+function buildFallbackRoutePoints(
+  start: RoutePoint,
+  stop: RoutePoint,
+  segments = 24
+): RoutePoint[] {
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const progress = index / segments;
+    return {
+      lat: start.lat + (stop.lat - start.lat) * progress,
+      lon: start.lon + (stop.lon - start.lon) * progress
+    };
+  });
+}
+
 function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+interface RouteDirectionSegment {
+  headingDegrees: number;
+  weight: number;
+  sampleIndex: number;
+}
+
+function findNearestSampleIndex(point: RoutePoint, sampledPoints: RoutePoint[]): number {
+  if (sampledPoints.length === 0) {
+    return 0;
+  }
+
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  sampledPoints.forEach((samplePoint, index) => {
+    const distance = estimateDistanceKm(point, samplePoint);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function buildRouteDirectionSegments(
+  routePoints: RoutePoint[],
+  sampledPoints: RoutePoint[]
+): RouteDirectionSegment[] {
+  if (routePoints.length < 2 || sampledPoints.length === 0) {
+    return [];
+  }
+
+  const segments = routePoints
+    .slice(0, -1)
+    .map((point, index) => {
+      const nextPoint = routePoints[index + 1];
+      const distance = estimateDistanceKm(point, nextPoint);
+
+      if (distance <= 0) {
+        return null;
+      }
+
+      const midpoint: RoutePoint = {
+        lat: (point.lat + nextPoint.lat) / 2,
+        lon: (point.lon + nextPoint.lon) / 2
+      };
+
+      return {
+        headingDegrees: (calculateBearing(point, nextPoint) + 360) % 360,
+        distance,
+        sampleIndex: findNearestSampleIndex(midpoint, sampledPoints)
+      };
+    })
+    .filter((segment): segment is { headingDegrees: number; distance: number; sampleIndex: number } =>
+      Boolean(segment)
+    );
+
+  const totalDistance = segments.reduce((sum, segment) => sum + segment.distance, 0);
+
+  if (totalDistance <= 0) {
+    return [];
+  }
+
+  return segments.map((segment) => ({
+    headingDegrees: segment.headingDegrees,
+    sampleIndex: segment.sampleIndex,
+    weight: segment.distance / totalDistance
+  }));
+}
+
+function getTailwindComponentMs(
+  windSpeed: number,
+  windFromDirection: number | undefined,
+  travelHeadingDegrees: number
+): number {
+  if (!Number.isFinite(windSpeed) || !Number.isFinite(windFromDirection)) {
+    return 0;
+  }
+
+  const windTowards = ((windFromDirection as number) + 180) % 360;
+  const diff = ((windTowards - travelHeadingDegrees + 540) % 360) - 180;
+  const radians = (diff * Math.PI) / 180;
+
+  return windSpeed * Math.cos(radians);
+}
+
+function scoreLabelFromScore(score: number): "good" | "ok" | "bad" {
+  if (score >= 75) {
+    return "good";
+  }
+
+  if (score >= 50) {
+    return "ok";
+  }
+
+  return "bad";
+}
+
+function averageDirectionDegrees(directions: number[]): number | undefined {
+  if (directions.length === 0) {
+    return undefined;
+  }
+
+  const vector = directions.reduce(
+    (acc, direction) => {
+      const radians = (direction * Math.PI) / 180;
+      return {
+        x: acc.x + Math.cos(radians),
+        y: acc.y + Math.sin(radians)
+      };
+    },
+    { x: 0, y: 0 }
+  );
+
+  if (Math.abs(vector.x) < 1e-6 && Math.abs(vector.y) < 1e-6) {
+    return undefined;
+  }
+
+  return (((Math.atan2(vector.y, vector.x) * 180) / Math.PI) + 360) % 360;
+}
+
+function mostFrequentSymbolCode(symbolCodes: Array<string | undefined>): string | undefined {
+  const counts = new Map<string, number>();
+
+  symbolCodes.forEach((symbolCode) => {
+    if (!symbolCode) {
+      return;
+    }
+
+    counts.set(symbolCode, (counts.get(symbolCode) || 0) + 1);
+  });
+
+  let bestSymbol: string | undefined;
+  let bestCount = -1;
+  counts.forEach((count, symbolCode) => {
+    if (count > bestCount) {
+      bestCount = count;
+      bestSymbol = symbolCode;
+    }
+  });
+
+  return bestSymbol;
+}
+
+function buildRouteWeatherHour(
+  hours: Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
+  routeDirectionSegments: RouteDirectionSegment[]
+): RouteWindHour {
+  const selectedHours = hours.filter((hour) => Boolean(hour));
+  const avgScore = selectedHours.reduce((sum, hour) => sum + hour.score, 0) / selectedHours.length;
+  const avgWind = selectedHours.reduce((sum, hour) => sum + hour.windSpeed, 0) / selectedHours.length;
+  const avgRain =
+    selectedHours.reduce((sum, hour) => sum + hour.precipitationAmount, 0) / selectedHours.length;
+  const avgTemp =
+    selectedHours.reduce((sum, hour) => sum + hour.airTemperature, 0) / selectedHours.length;
+  const avgCloudCover =
+    selectedHours.reduce((sum, hour) => sum + hour.cloudCoverPercent, 0) / selectedHours.length;
+  const avgWindGustSamples = selectedHours.filter((hour) => Number.isFinite(hour.windGust));
+  const avgWindGust =
+    avgWindGustSamples.length > 0
+      ? avgWindGustSamples.reduce((sum, hour) => sum + (hour.windGust || 0), 0) /
+        avgWindGustSamples.length
+      : undefined;
+  const avgWindDirection = averageDirectionDegrees(
+    selectedHours
+      .map((hour) => hour.windFromDirection)
+      .filter((direction): direction is number => Number.isFinite(direction))
+  );
+  const representativeSymbol = mostFrequentSymbolCode(
+    selectedHours.map((hour) => hour.symbolCode)
+  );
+  const avgTailwind =
+    routeDirectionSegments.length > 0
+      ? routeDirectionSegments.reduce((sum, segment) => {
+          const segmentHour = selectedHours[segment.sampleIndex] || selectedHours[0];
+          const segmentTailwind = getTailwindComponentMs(
+            segmentHour.windSpeed,
+            segmentHour.windFromDirection,
+            segment.headingDegrees
+          );
+
+          return sum + segmentTailwind * segment.weight;
+        }, 0)
+      : 0;
+
+  const tailwindBonus = Math.max(-6, Math.min(8, avgTailwind * 2));
+  const finalScore = Math.max(0, Math.min(100, Math.round(avgScore + tailwindBonus)));
+
+  return {
+    time: selectedHours[0].time,
+    score: finalScore,
+    scoreLabel: scoreLabelFromScore(finalScore),
+    windSpeed: roundToOneDecimal(avgWind),
+    cloudCoverPercent: roundToOneDecimal(avgCloudCover),
+    symbolCode: representativeSymbol,
+    windFromDirection:
+      avgWindDirection !== undefined ? roundToOneDecimal(avgWindDirection) : undefined,
+    windGust: avgWindGust !== undefined ? roundToOneDecimal(avgWindGust) : undefined,
+    precipitationAmount: roundToOneDecimal(avgRain),
+    airTemperature: roundToOneDecimal(avgTemp),
+    tailwindMs: roundToOneDecimal(avgTailwind)
+  };
+}
+
+function buildSharedRouteHourTimestamps(
+  forecasts: Awaited<ReturnType<typeof fetchForecastForLocation>>[]
+): string[] {
+  if (forecasts.length === 0) {
+    return [];
+  }
+
+  const timestampCounts = new Map<string, number>();
+
+  forecasts.forEach((forecast) => {
+    const uniqueTimestamps = new Set(
+      forecast.hours
+        .map((hour) => hour?.time)
+        .filter((time): time is string => typeof time === "string" && time.length > 0)
+    );
+
+    uniqueTimestamps.forEach((time) => {
+      timestampCounts.set(time, (timestampCounts.get(time) || 0) + 1);
+    });
+  });
+
+  return Array.from(timestampCounts.entries())
+    .filter(([, count]) => count === forecasts.length)
+    .map(([time]) => time)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+}
+
+function getNextHourTimestamp(nowMs: number): number {
+  const oneHourMs = 60 * 60 * 1000;
+  return Math.floor(nowMs / oneHourMs) * oneHourMs + oneHourMs;
+}
+
+function buildBestWindow(
+  hours: RouteWindHour[],
+  analysisRunMs: number,
+  maxHoursAhead: number
+): { startTime: string; endTime: string; averageScore: number; explanation: string } | null {
+  const nextHourTs = getNextHourTimestamp(analysisRunMs);
+  const upperBoundTs = nextHourTs + maxHoursAhead * 60 * 60 * 1000;
+  const relevantHours = hours.filter((hour) => {
+    const ts = new Date(hour.time).getTime();
+    return ts >= nextHourTs && ts < upperBoundTs;
+  });
+
+  if (relevantHours.length === 0) {
+    return null;
+  }
+
+  const windowSize = Math.min(3, relevantHours.length);
+  let rollingSum = 0;
+  let bestAverage = -1;
+  let bestStart = 0;
+
+  for (let index = 0; index < relevantHours.length; index += 1) {
+    rollingSum += relevantHours[index].score;
+
+    if (index >= windowSize) {
+      rollingSum -= relevantHours[index - windowSize].score;
+    }
+
+    if (index >= windowSize - 1) {
+      const average = rollingSum / windowSize;
+      if (average > bestAverage) {
+        bestAverage = average;
+        bestStart = index - windowSize + 1;
+      }
+    }
+  }
+
+  const bestSegment = relevantHours.slice(bestStart, bestStart + windowSize);
+
+  return {
+    startTime: bestSegment[0].time,
+    endTime: bestSegment[bestSegment.length - 1].time,
+    averageScore: Math.round(bestAverage),
+    explanation: "Beste tidsvindu for valgt rute, inkludert medvind langs traseen."
+  };
+}
+
+function toRoutingCandidateKey(value: number): string {
+  return value.toFixed(4);
+}
+
+async function fetchDirectedRoute(
+  start: RoutePoint,
+  stop: RoutePoint,
+  deadlineTs?: number
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const startCandidates = buildNearbyRoutingCandidates(start);
+  const stopCandidates = buildNearbyRoutingCandidates(stop);
+  const triedPairs = new Set<string>();
+  const effectiveDeadlineTs =
+    deadlineTs === undefined ? Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS : deadlineTs;
+
+  for (const startCandidate of startCandidates) {
+    for (const stopCandidate of stopCandidates) {
+      const remainingTimeMs = effectiveDeadlineTs - Date.now();
+      if (remainingTimeMs <= 0) {
+        return null;
+      }
+
+      const pairKey = `${toRoutingCandidateKey(startCandidate.lat)}:${toRoutingCandidateKey(startCandidate.lon)}|${toRoutingCandidateKey(stopCandidate.lat)}:${toRoutingCandidateKey(stopCandidate.lon)}`;
+
+      if (triedPairs.has(pairKey)) {
+        continue;
+      }
+
+      triedPairs.add(pairKey);
+
+      const vegvesenRoute = await fetchVegvesenRoute(
+        startCandidate,
+        stopCandidate,
+        effectiveDeadlineTs
+      );
+      if (vegvesenRoute) {
+        return vegvesenRoute;
+      }
+
+      const osrmRoute = await fetchOsrmFallbackRoute(
+        startCandidate,
+        stopCandidate,
+        effectiveDeadlineTs
+      );
+      if (osrmRoute) {
+        return osrmRoute;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function fetchVegvesenRoute(
+  start: RoutePoint,
+  stop: RoutePoint,
+  deadlineTs?: number
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const requestCandidates = buildVegvesenRequestCandidates(start, stop);
+
+  for (const params of requestCandidates) {
+    const remainingTimeMs =
+      deadlineTs === undefined ? Number.POSITIVE_INFINITY : deadlineTs - Date.now();
+
+    if (remainingTimeMs <= 0) {
+      return null;
+    }
+
+    const url =
+      "https://www.vegvesen.no/ws/no/vegvesen/ruteplan/routingService_v1_0/routingService?" +
+      params.toString();
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+        },
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(Math.max(1, Math.min(20000, remainingTimeMs)))
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as Record<string, unknown>;
+      const routeData = extractVegvesenRouteData(payload);
+
+      if (!routeData || routeData.rawCoordinates.length < 2) {
+        continue;
+      }
+
+      const points = routeData.rawCoordinates.map(([x, y]) =>
+        isLikelyLonLat(x, y) ? { lon: x, lat: y } : utm33ToLatLon(x, y)
+      );
+      const distanceMeters = routeData.distanceMeters;
+      const distanceKm = Number.isFinite(distanceMeters)
+        ? roundToOneDecimal((distanceMeters as number) / 1000)
+        : roundToOneDecimal(estimateDistanceKm(start, stop) * 1.3);
+
+      return {
+        distanceKm,
+        points
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function buildVegvesenRequestCandidates(start: RoutePoint, stop: RoutePoint): URLSearchParams[] {
+  const startUtm = latLonToUtm33(start);
+  const stopUtm = latLonToUtm33(stop);
+  const timestamp = formatRouteTimestamp(new Date());
+  const stopVariants = [
+    {
+      first: `${startUtm.easting},${startUtm.northing}`,
+      second: `${stopUtm.easting},${stopUtm.northing}`,
+      inSr: undefined,
+      outSr: undefined
+    },
+    {
+      first: `${start.lon},${start.lat}`,
+      second: `${stop.lon},${stop.lat}`,
+      inSr: "4326",
+      outSr: "4326"
+    },
+    {
+      first: `${start.lat},${start.lon}`,
+      second: `${stop.lat},${stop.lon}`,
+      inSr: "4326",
+      outSr: "4326"
+    }
+  ];
+  const separators = [";", "|"];
+  const candidates: URLSearchParams[] = [];
+
+  for (const variant of stopVariants) {
+    for (const separator of separators) {
+      const params = new URLSearchParams({
+        stops: `${variant.first}${separator}${variant.second}`,
+        returnGeometry: "true",
+        format: "json",
+        route_type: "best",
+        st: timestamp
+      });
+
+      if (variant.inSr) {
+        params.set("inSR", variant.inSr);
+      }
+
+      if (variant.outSr) {
+        params.set("outSR", variant.outSr);
+      }
+
+      candidates.push(params);
+    }
+  }
+
+  return candidates;
+}
+
+function formatRouteTimestamp(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  const seconds = String(value.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+function buildNearbyRoutingCandidates(point: RoutePoint): RoutePoint[] {
+  const offsetKm = 0.18;
+  const latOffset = offsetKm / 111.32;
+  const lonOffset = offsetKm / Math.max(0.3, Math.cos((point.lat * Math.PI) / 180) * 111.32);
+
+  return [
+    point,
+    { lat: point.lat + latOffset, lon: point.lon },
+    { lat: point.lat - latOffset, lon: point.lon },
+    { lat: point.lat, lon: point.lon + lonOffset },
+    { lat: point.lat, lon: point.lon - lonOffset }
+  ];
+}
+
+function isLikelyLonLat(x: number, y: number): boolean {
+  return Math.abs(x) <= 180 && Math.abs(y) <= 90;
+}
+
+function extractVegvesenRouteData(
+  payload: Record<string, unknown>
+): { rawCoordinates: Array<[number, number]>; distanceMeters?: number } | null {
+  const candidates: Array<Record<string, unknown>> = [];
+  const routesObject = payload.routes as Record<string, unknown> | undefined;
+  const routesFeatures = routesObject?.features;
+
+  if (Array.isArray(routesFeatures)) {
+    routesFeatures.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  if (Array.isArray(payload.routes)) {
+    payload.routes.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  if (Array.isArray(payload.features)) {
+    payload.features.forEach((item) => {
+      if (item && typeof item === "object") {
+        candidates.push(item as Record<string, unknown>);
+      }
+    });
+  }
+
+  for (const candidate of candidates) {
+    const geometry = candidate.geometry as Record<string, unknown> | undefined;
+    const attributes = candidate.attributes as Record<string, unknown> | undefined;
+    const rawCoordinates = extractRawCoordinatesFromGeometry(geometry);
+
+    if (rawCoordinates.length < 2) {
+      continue;
+    }
+
+    const distanceMetersCandidate =
+      toFiniteNumber(attributes?.Total_Meters) ||
+      toFiniteNumber(attributes?.total_meters) ||
+      toFiniteNumber(attributes?.Shape_Length);
+
+    return {
+      rawCoordinates,
+      distanceMeters: distanceMetersCandidate
+    };
+  }
+
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function extractRawCoordinatesFromGeometry(
+  geometry?: Record<string, unknown>
+): Array<[number, number]> {
+  if (!geometry) {
+    return [];
+  }
+
+  const paths = geometry.paths;
+  if (Array.isArray(paths) && Array.isArray(paths[0])) {
+    const firstPath = paths[0];
+    const coordinates = firstPath
+      .map((entry) => {
+        if (!Array.isArray(entry) || entry.length < 2) {
+          return null;
+        }
+        const x = toFiniteNumber(entry[0]);
+        const y = toFiniteNumber(entry[1]);
+        if (x === undefined || y === undefined) {
+          return null;
+        }
+        return [x, y] as [number, number];
+      })
+      .filter((entry): entry is [number, number] => Boolean(entry));
+
+    if (coordinates.length > 0) {
+      return coordinates;
+    }
+  }
+
+  const coordinates = geometry.coordinates;
+  if (Array.isArray(coordinates)) {
+    const flattened =
+      Array.isArray(coordinates[0]) && Array.isArray((coordinates[0] as unknown[])[0])
+        ? (coordinates[0] as unknown[])
+        : coordinates;
+    const parsed = flattened
+      .map((entry) => {
+        if (!Array.isArray(entry) || entry.length < 2) {
+          return null;
+        }
+        const x = toFiniteNumber(entry[0]);
+        const y = toFiniteNumber(entry[1]);
+        if (x === undefined || y === undefined) {
+          return null;
+        }
+        return [x, y] as [number, number];
+      })
+      .filter((entry): entry is [number, number] => Boolean(entry));
+
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  }
+
+  return [];
+}
+
+async function fetchOsrmFallbackRoute(
+  start: RoutePoint,
+  stop: RoutePoint,
+  deadlineTs?: number
+): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const straightDistanceKm = Math.max(0.1, estimateDistanceKm(start, stop));
+  const profiles = ["driving", "bicycle", "foot"];
+
+  for (const profile of profiles) {
+    const remainingTimeMs =
+      deadlineTs === undefined ? Number.POSITIVE_INFINITY : deadlineTs - Date.now();
+
+    if (remainingTimeMs <= 0) {
+      return null;
+    }
+
+    const url =
+      `https://router.project-osrm.org/route/v1/${profile}/` +
+      `${start.lon},${start.lat};${stop.lon},${stop.lat}` +
+      `?overview=full&geometries=geojson&steps=false&alternatives=false`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+        },
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(
+          Math.max(1, Math.min(getOsrmFetchTimeoutMs(straightDistanceKm), remainingTimeMs))
+        )
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as OsrmResponse;
+      const bestRoute = payload.routes?.[0];
+
+      if (!bestRoute?.geometry?.coordinates || bestRoute.geometry.coordinates.length < 2) {
+        continue;
+      }
+
+      return {
+        distanceKm: roundToOneDecimal(bestRoute.distance / 1000),
+        points: bestRoute.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }))
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export async function analyzeUserRoute(
+  start: RoutePoint,
+  stop: RoutePoint,
+  startLabel: string,
+  stopLabel: string
+): Promise<RouteTimeAnalysisResponse> {
+  const directedRouteDeadlineTs = Date.now() + DIRECTED_ROUTE_PROBING_BUDGET_MS;
+  const outboundRoute = await fetchDirectedRoute(start, stop, directedRouteDeadlineTs);
+  const hasOutboundRoute = Boolean(outboundRoute);
+  const outboundPoints = outboundRoute?.points || buildFallbackRoutePoints(start, stop);
+  const outboundDistanceKm = outboundRoute?.distanceKm || roundToOneDecimal(estimateDistanceKm(start, stop));
+
+  const remainingDirectedRouteTimeMs = directedRouteDeadlineTs - Date.now();
+  const shouldProbeReturnRoute =
+    hasOutboundRoute && remainingDirectedRouteTimeMs >= MIN_REMAINING_MS_FOR_RETURN_PROBE_MS;
+  const returnRoute = shouldProbeReturnRoute
+    ? await fetchDirectedRoute(stop, start, directedRouteDeadlineTs)
+    : null;
+  const hasReturnRoute = hasOutboundRoute && Boolean(returnRoute);
+  const roundTripPoints =
+    hasReturnRoute
+      ? [...outboundPoints, ...(returnRoute?.points.slice(1) || [])]
+      : outboundPoints;
+  const totalRoundTripDistanceKm = roundToOneDecimal(
+    outboundDistanceKm + (returnRoute?.distanceKm || 0)
+  );
+  const route: Route = {
+    id: "brukervalg",
+    shortName: "Valgt rute",
+    description: hasOutboundRoute
+      ? hasReturnRoute
+        ? "Tur/retur langs vei mellom valgt start og stopp"
+        : "Enveisrute langs vei (returrute ikke tilgjengelig akkurat nå)"
+      : "Enveisanalyse uten veigeometri (karttjeneste utilgjengelig akkurat nå)",
+    distanceKm: hasReturnRoute ? totalRoundTripDistanceKm : outboundDistanceKm,
+    oneWayDistanceKm: outboundDistanceKm,
+    isRoundTrip: hasReturnRoute,
+    startLabel,
+    endLabel: stopLabel,
+    points: roundTripPoints
+  };
+
+  const sampledPoints = sampleRoutePoints(route, ROUTE_SAMPLE_COUNT);
+  const forecasts = await Promise.all(
+    sampledPoints.map((point, index) =>
+      fetchForecastForLocation(point.lat, point.lon, `Rute punkt ${index + 1}`)
+    )
+  );
+
+  const sharedHourTimestamps = buildSharedRouteHourTimestamps(forecasts);
+  if (sharedHourTimestamps.length === 0) {
+    throw new Error("Fant ikke nok værdata for ruten.");
+  }
+
+  const routeDirectionSegments = buildRouteDirectionSegments(route.points, sampledPoints);
+  const forecastHoursByTimestamp = forecasts.map(
+    (forecast) => new Map(forecast.hours.map((hour) => [hour.time, hour]))
+  );
+  const routeHours: RouteWindHour[] = sharedHourTimestamps
+    .map((timestamp) => {
+      const hourlySamples = forecastHoursByTimestamp.map((forecastHours) =>
+        forecastHours.get(timestamp)
+      );
+      const missingSample = hourlySamples.some((hour) => !hour);
+      if (missingSample) {
+        return null;
+      }
+      return buildRouteWeatherHour(
+        hourlySamples as Awaited<ReturnType<typeof fetchForecastForLocation>>["hours"],
+        routeDirectionSegments
+      );
+    })
+    .filter((hour): hour is RouteWindHour => Boolean(hour));
+
+  if (routeHours.length === 0) {
+    throw new Error("Fant ikke nok værdata for ruten.");
+  }
+
+  const analysisRunMs = Date.now();
+
+  return {
+    analyzedAt: new Date(analysisRunMs).toISOString(),
+    route,
+    sampledPoints,
+    hours: routeHours,
+    bestWindowNext24h: buildBestWindow(routeHours, analysisRunMs, 24),
+    bestWindowNext7d: buildBestWindow(routeHours, analysisRunMs, 24 * 7)
+  };
 }

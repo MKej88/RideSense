@@ -43,7 +43,9 @@ type LeafletGlobal = {
     urlTemplate: string,
     options: {
       maxZoom: number;
+      minZoom?: number;
       attribution: string;
+      subdomains?: string;
     }
   ) => {
     addTo: (map: LeafletMap) => void;
@@ -148,8 +150,10 @@ export function LocationMap({
       mapRef.current = map;
 
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap-bidragsytere"
+        minZoom: 0,
+        maxZoom: 18,
+        subdomains: "abc",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
 
       const icon = window.L.divIcon({
@@ -221,7 +225,7 @@ export function LocationMap({
       <h3 className="text-base font-semibold text-slate-100">Kart</h3>
       <p className="mt-1 text-sm text-slate-400">
         Dra markøren for å oppdatere startplass og vær. Når du velger en rute, vises den som en
-        tydelig orange linje og kartet sentreres på ruten.
+        tydelig orange linje og kartet sentreres på ruten. Kartbakgrunnen er fra OpenStreetMap.
       </p>
       <div ref={mapContainerRef} className="mt-3 h-72 w-full overflow-hidden rounded-lg md:h-96" />
     </section>

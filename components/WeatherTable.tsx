@@ -127,6 +127,8 @@ function getWindGustWarning(windGust?: number): string | null {
 }
 
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
+  const showTailwindColumn = hours.some((hour) => hour.tailwindMs !== undefined);
+
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
       <table className="min-w-full text-sm">
@@ -140,6 +142,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             <th className="px-4 py-3">Vind</th>
             <th className="px-4 py-3">Vindkast</th>
             <th className="px-4 py-3">Vindretning</th>
+            {showTailwindColumn ? <th className="px-4 py-3">Medvind</th> : null}
             <th className="px-4 py-3">Score</th>
           </tr>
         </thead>
@@ -179,6 +182,11 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <td className="px-4 py-3">
                   {formatWindDescription(hour.windSpeed, hour.windFromDirection)}
                 </td>
+                {showTailwindColumn ? (
+                  <td className="px-4 py-3">
+                    {hour.tailwindMs !== undefined ? `${hour.tailwindMs.toFixed(1)} m/s` : "-"}
+                  </td>
+                ) : null}
                 <td className="px-4 py-3">
                   <ScoreBadge label={hour.scoreLabel} score={hour.score} />
                 </td>
