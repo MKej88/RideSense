@@ -1481,54 +1481,81 @@ async function fetchVegvesenRoute(
   start: RoutePoint,
   stop: RoutePoint
 ): Promise<{ distanceKm: number; points: RoutePoint[] } | null> {
+  const requestCandidates = buildVegvesenRequestCandidates(start, stop);
+
+  for (const params of requestCandidates) {
+    const url =
+      "https://www.vegvesen.no/ws/no/vegvesen/ruteplan/routingService_v1_0/routingService?" +
+      params.toString();
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
+        },
+        next: { revalidate: 600 },
+        signal: AbortSignal.timeout(20000)
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as Record<string, unknown>;
+      const routeData = extractVegvesenRouteData(payload);
+
+      if (!routeData || routeData.rawCoordinates.length < 2) {
+        continue;
+      }
+
+      const points = routeData.rawCoordinates.map(([x, y]) =>
+        isLikelyLonLat(x, y) ? { lon: x, lat: y } : utm33ToLatLon(x, y)
+      );
+      const distanceMeters = routeData.distanceMeters;
+      const distanceKm = Number.isFinite(distanceMeters)
+        ? roundToOneDecimal((distanceMeters as number) / 1000)
+        : roundToOneDecimal(estimateDistanceKm(start, stop) * 1.3);
+
+      return {
+        distanceKm,
+        points
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function buildVegvesenRequestCandidates(start: RoutePoint, stop: RoutePoint): URLSearchParams[] {
   const startUtm = latLonToUtm33(start);
   const stopUtm = latLonToUtm33(stop);
-  const stops = `${startUtm.easting},${startUtm.northing};${stopUtm.easting},${stopUtm.northing}`;
-  const params = new URLSearchParams({
-    stops,
-    returnGeometry: "true",
-    format: "json",
-    route_type: "best"
-  });
-  const url =
-    "https://www.vegvesen.no/ws/no/vegvesen/ruteplan/routingService_v1_0/routingService?" +
-    params.toString();
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0"
-      },
-      next: { revalidate: 600 },
-      signal: AbortSignal.timeout(20000)
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json()) as Record<string, unknown>;
-    const routeData = extractVegvesenRouteData(payload);
-
-    if (!routeData || routeData.rawCoordinates.length < 2) {
-      return null;
-    }
-
-    const points = routeData.rawCoordinates.map(([x, y]) =>
-      isLikelyLonLat(x, y) ? { lon: x, lat: y } : utm33ToLatLon(x, y)
-    );
-    const distanceMeters = routeData.distanceMeters;
-    const distanceKm = Number.isFinite(distanceMeters)
-      ? roundToOneDecimal((distanceMeters as number) / 1000)
-      : roundToOneDecimal(estimateDistanceKm(start, stop) * 1.3);
-
-    return {
-      distanceKm,
-      points
-    };
-  } catch {
-    return null;
-  }
+  return [
+    new URLSearchParams({
+      stops: `${startUtm.easting},${startUtm.northing};${stopUtm.easting},${stopUtm.northing}`,
+      returnGeometry: "true",
+      format: "json",
+      route_type: "best"
+    }),
+    new URLSearchParams({
+      stops: `${start.lon},${start.lat};${stop.lon},${stop.lat}`,
+      returnGeometry: "true",
+      format: "json",
+      route_type: "best",
+      inSR: "4326",
+      outSR: "4326"
+    }),
+    new URLSearchParams({
+      stops: `${start.lat},${start.lon};${stop.lat},${stop.lon}`,
+      returnGeometry: "true",
+      format: "json",
+      route_type: "best",
+      inSR: "4326",
+      outSR: "4326"
+    })
+  ];
 }
 
 function isLikelyLonLat(x: number, y: number): boolean {
