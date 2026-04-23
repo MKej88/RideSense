@@ -130,71 +130,154 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   const showTailwindColumn = hours.some((hour) => hour.tailwindMs !== undefined);
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm">
-      <table className="min-w-full text-sm">
-        <thead className="bg-slate-800 text-left text-slate-300">
-          <tr>
-            <th className="px-4 py-3">Tid</th>
-            <th className="px-4 py-3">Temp</th>
-            <th className="px-4 py-3">Nedbør</th>
-            <th className="px-4 py-3">Skydekke</th>
-            <th className="px-4 py-3">Symbol</th>
-            <th className="px-4 py-3">Vind</th>
-            <th className="px-4 py-3">Vindkast</th>
-            <th className="px-4 py-3">Vindretning</th>
-            {showTailwindColumn ? <th className="px-4 py-3">Medvind</th> : null}
-            <th className="px-4 py-3">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {hours.map((hour) => {
-            const symbolEmoji = getSymbolEmoji(hour.symbolCode);
-            const windGustWarning = getWindGustWarning(hour.windGust);
+    <div className="space-y-4">
+      <div className="grid gap-3 lg:hidden">
+        {hours.map((hour) => {
+          const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+          const windGustWarning = getWindGustWarning(hour.windGust);
 
-            return (
-              <tr key={hour.time} className="border-t border-slate-800">
-                <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
-                <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
-                <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
-                <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
-                <td className="px-4 py-3">
-                  <div
-                    className="flex items-center justify-center text-2xl"
-                    title={formatSymbol(hour.symbolCode)}
-                    aria-label={formatSymbol(hour.symbolCode)}
-                  >
-                    {symbolEmoji}
+          return (
+            <article
+              key={hour.time}
+              className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-base leading-relaxed"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-100">{formatHour(hour.time)}</p>
+                <ScoreBadge label={hour.scoreLabel} score={hour.score} />
+              </div>
+
+              <dl className="mt-3 space-y-2 text-slate-200">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-400">Vind</dt>
+                  <dd className="text-right font-medium">{hour.windSpeed.toFixed(1)} m/s</dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-400">Nedbør</dt>
+                  <dd className="text-right font-medium">
+                    {hour.precipitationAmount.toFixed(1)} mm
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-400">Vindkast</dt>
+                  <dd className="text-right font-medium">
+                    {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
+                  </dd>
+                </div>
+              </dl>
+
+              {windGustWarning ? (
+                <p className="mt-3 rounded-md border border-amber-700 bg-amber-950/50 px-3 py-2 text-sm font-medium text-amber-200">
+                  {windGustWarning}
+                </p>
+              ) : null}
+
+              <details className="mt-3 group">
+                <summary className="cursor-pointer list-none rounded-md border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white">
+                  <span className="group-open:hidden">Vis mer</span>
+                  <span className="hidden group-open:inline">Vis mindre</span>
+                </summary>
+                <dl className="mt-3 space-y-2 text-sm text-slate-300">
+                  <div className="flex items-start justify-between gap-4">
+                    <dt>Temperatur</dt>
+                    <dd className="text-right">{hour.airTemperature.toFixed(1)}°C</dd>
                   </div>
-                </td>
-                <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
-                <td className="px-4 py-3">
-                  {hour.windGust !== undefined ? (
-                    <div>
-                      <p>{hour.windGust.toFixed(1)} m/s</p>
-                      {windGustWarning ? (
-                        <p className="mt-1 text-xs text-amber-300">{windGustWarning}</p>
-                      ) : null}
+                  <div className="flex items-start justify-between gap-4">
+                    <dt>Skydekke</dt>
+                    <dd className="text-right">{hour.cloudCoverPercent.toFixed(0)} %</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <dt>Vindretning</dt>
+                    <dd className="text-right">{formatWindDescription(hour.windSpeed, hour.windFromDirection)}</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <dt>Symbol</dt>
+                    <dd className="text-right" title={formatSymbol(hour.symbolCode)}>
+                      {symbolEmoji} {formatSymbol(hour.symbolCode)}
+                    </dd>
+                  </div>
+                  {showTailwindColumn ? (
+                    <div className="flex items-start justify-between gap-4">
+                      <dt>Medvind</dt>
+                      <dd className="text-right">
+                        {hour.tailwindMs !== undefined
+                          ? `${hour.tailwindMs.toFixed(1)} m/s`
+                          : "-"}
+                      </dd>
                     </div>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {formatWindDescription(hour.windSpeed, hour.windFromDirection)}
-                </td>
-                {showTailwindColumn ? (
+                  ) : null}
+                </dl>
+              </details>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm lg:block">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-800 text-left text-slate-300">
+            <tr>
+              <th className="px-4 py-3">Tid</th>
+              <th className="px-4 py-3">Temp</th>
+              <th className="px-4 py-3">Nedbør</th>
+              <th className="px-4 py-3">Skydekke</th>
+              <th className="px-4 py-3">Symbol</th>
+              <th className="px-4 py-3">Vind</th>
+              <th className="px-4 py-3">Vindkast</th>
+              <th className="px-4 py-3">Vindretning</th>
+              {showTailwindColumn ? <th className="px-4 py-3">Medvind</th> : null}
+              <th className="px-4 py-3">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hours.map((hour) => {
+              const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+              const windGustWarning = getWindGustWarning(hour.windGust);
+
+              return (
+                <tr key={hour.time} className="border-t border-slate-800">
+                  <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
+                  <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
+                  <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
+                  <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                   <td className="px-4 py-3">
-                    {hour.tailwindMs !== undefined ? `${hour.tailwindMs.toFixed(1)} m/s` : "-"}
+                    <div
+                      className="flex items-center justify-center text-2xl"
+                      title={formatSymbol(hour.symbolCode)}
+                      aria-label={formatSymbol(hour.symbolCode)}
+                    >
+                      {symbolEmoji}
+                    </div>
                   </td>
-                ) : null}
-                <td className="px-4 py-3">
-                  <ScoreBadge label={hour.scoreLabel} score={hour.score} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
+                  <td className="px-4 py-3">
+                    {hour.windGust !== undefined ? (
+                      <div>
+                        <p>{hour.windGust.toFixed(1)} m/s</p>
+                        {windGustWarning ? (
+                          <p className="mt-1 text-xs text-amber-300">{windGustWarning}</p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {formatWindDescription(hour.windSpeed, hour.windFromDirection)}
+                  </td>
+                  {showTailwindColumn ? (
+                    <td className="px-4 py-3">
+                      {hour.tailwindMs !== undefined ? `${hour.tailwindMs.toFixed(1)} m/s` : "-"}
+                    </td>
+                  ) : null}
+                  <td className="px-4 py-3">
+                    <ScoreBadge label={hour.scoreLabel} score={hour.score} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
