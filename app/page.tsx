@@ -176,8 +176,51 @@ export default function HomePage() {
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
   const deferredStopQuery = useDeferredValue(stopQuery);
+  const areaSectionRef = useRef<HTMLElement | null>(null);
+  const startSectionRef = useRef<HTMLDivElement | null>(null);
+  const weatherSectionRef = useRef<HTMLElement | null>(null);
+  const routeSectionRef = useRef<HTMLElement | null>(null);
+  const prevStep1Ref = useRef(false);
+  const prevStep2Ref = useRef(false);
+  const prevStep3Ref = useRef(false);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
+  const step1Completed = Boolean(selectedArea);
+  const step2Completed = Boolean(selectedRouteStart);
+  const step3Completed = Boolean(weather);
+  const step4Completed = Boolean(routeAnalysis);
+
+  function scrollToSection(ref: { current: HTMLElement | HTMLDivElement | null }): void {
+    window.setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  }
+
+  function resetFlow(): void {
+    setQuery("");
+    setResults([]);
+    setPlaceLoading(false);
+    setSelectedArea(null);
+    setAddressQuery("");
+    setAddressResults([]);
+    setAddressLoading(false);
+    setAddressError(null);
+    setStopQuery("");
+    setStopResults([]);
+    setStopLoading(false);
+    setStopError(null);
+    setSelectedStop(null);
+    setSelectedRouteStart(null);
+    setSelected(null);
+    setWeather(null);
+    setWeatherLoading(false);
+    setError(null);
+    setRouteAnalysis(null);
+    setRouteLoading(false);
+    setRouteError(null);
+    setAnalysisRunMs(null);
+    setActiveTab("forecast");
+  }
 
   function searchPlace(event: FormEvent): void {
     event.preventDefault();
@@ -621,6 +664,30 @@ export default function HomePage() {
     [activeTab, loadWeatherForPlace]
   );
 
+  useEffect(() => {
+    if (step1Completed && !prevStep1Ref.current) {
+      setActiveTab("routes");
+      scrollToSection(startSectionRef);
+    }
+    prevStep1Ref.current = step1Completed;
+  }, [step1Completed]);
+
+  useEffect(() => {
+    if (step2Completed && !prevStep2Ref.current) {
+      setActiveTab("forecast");
+      scrollToSection(weatherSectionRef);
+    }
+    prevStep2Ref.current = step2Completed;
+  }, [step2Completed]);
+
+  useEffect(() => {
+    if (step3Completed && !prevStep3Ref.current) {
+      setActiveTab("routes");
+      scrollToSection(routeSectionRef);
+    }
+    prevStep3Ref.current = step3Completed;
+  }, [step3Completed]);
+
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
@@ -728,8 +795,60 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-slate-100">Trinn for trinn</h2>
+          <button
+            type="button"
+            onClick={resetFlow}
+            className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+          >
+            Start på nytt
+          </button>
+        </div>
+        <ol className="mt-3 grid gap-2 md:grid-cols-4">
+          {[
+            {
+              title: "1) Velg område",
+              help: "Finn byen eller området du skal sykle i.",
+              done: step1Completed
+            },
+            {
+              title: "2) Velg startpunkt",
+              help: "Velg hvor turen starter.",
+              done: step2Completed
+            },
+            {
+              title: "3) Se vær",
+              help: "Sjekk værscore før du planlegger.",
+              done: step3Completed
+            },
+            {
+              title: "4) Analyser rute",
+              help: "Legg inn stopp og se beste tidspunkt.",
+              done: step4Completed
+            }
+          ].map((step) => (
+            <li
+              key={step.title}
+              className={`rounded-lg border p-3 ${
+                step.done
+                  ? "border-emerald-500/40 bg-emerald-900/20"
+                  : "border-slate-700 bg-slate-800/50 text-slate-300"
+              }`}
+            >
+              <p className="text-sm font-medium">{step.title}</p>
+              <p className="mt-1 text-xs text-slate-400">{step.help}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {activeTab === "forecast" && (
-      <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
+      <section
+        ref={areaSectionRef}
+        className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700"
+      >
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -824,7 +943,7 @@ export default function HomePage() {
       )}
 
       {weather && activeTab === "forecast" && (
-        <section className="space-y-4">
+        <section ref={weatherSectionRef} className="space-y-4">
           <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
@@ -939,11 +1058,19 @@ export default function HomePage() {
 
       {activeTab === "routes" && (
         <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
+          <div
+            ref={startSectionRef}
+            className={`rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm ${
+              step1Completed ? "" : "pointer-events-none opacity-45"
+            }`}
+          >
             <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
               Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
               sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              Trinn 2: Velg først startpunkt. Trinn 3: Se vær før du analyserer ruten.
             </p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1034,13 +1161,33 @@ export default function HomePage() {
                 <p className="mt-1 text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
               </div>
             </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                onClick={() => {
+                  if (!selectedRouteStart) {
+                    return;
+                  }
+                  void loadWeatherForPlace(selectedRouteStart);
+                }}
+                disabled={!selectedRouteStart || weatherLoading}
+              >
+                Se vær for startpunkt
+              </button>
+            </div>
 
             <button
               type="button"
               onClick={() => void analyzeRoutes()}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
               disabled={
-                !selectedRouteStart || !selectedStop || routeLoading || addressLoading || stopLoading
+                !selectedRouteStart ||
+                !selectedStop ||
+                !step3Completed ||
+                routeLoading ||
+                addressLoading ||
+                stopLoading
               }
             >
               Analyser valgt rute
@@ -1052,7 +1199,10 @@ export default function HomePage() {
           )}
 
           {routeAnalysis && (
-            <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+            <section
+              ref={routeSectionRef}
+              className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700"
+            >
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg bg-slate-800/60 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">
