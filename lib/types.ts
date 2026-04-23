@@ -58,6 +58,7 @@ export interface BestWindow {
 export interface WeatherResponse {
   locationLabel: string;
   timezone: string;
+  updatedAt: string;
   hours: ScoredWeatherHour[];
   bestWindowToday: BestWindow | null;
   bestWindowNext7Days: BestWindow | null;

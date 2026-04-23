@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { RouteAnalysisResponse } from "@/lib/types";
+import { formatOsloDateTime, formatOsloTime, isOlderThanMinutes } from "@/lib/time-format";
 
 interface RouteAnalysisPanelProps {
   data: RouteAnalysisResponse | null;
@@ -10,13 +12,6 @@ interface RouteAnalysisPanelProps {
   onRefresh: () => void;
 }
 
-function formatTime(time: string): string {
-  return new Date(time).toLocaleTimeString("nb-NO", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
 export function RouteAnalysisPanel({
   data,
   loading,
@@ -25,8 +20,19 @@ export function RouteAnalysisPanel({
   onSelectRoute,
   onRefresh
 }: RouteAnalysisPanelProps) {
+  const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStaleCheckTick(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const selectedRoute =
     data?.routes.find((route) => route.route.id === selectedRouteId) ?? data?.routes[0] ?? null;
+  const analysisIsStale = data ? isOlderThanMinutes(data.analyzedAt, 60, staleCheckTick) : false;
 
   return (
     <section className="rounded-xl bg-slate-900 p-6 shadow-sm">
@@ -38,6 +44,14 @@ export function RouteAnalysisPanel({
             innenfor {data?.minDistanceKm ?? "valgt"}-{data?.maxDistanceKm ?? "valgt"} km,
             sampler fem punkter langs hver og beregner en samlet rutescore.
           </p>
+          {data && (
+            <p
+              className={`mt-2 text-xs ${analysisIsStale ? "text-amber-300" : "text-slate-400"}`}
+            >
+              Sist oppdatert ruteanalyse: {formatOsloDateTime(data.analyzedAt)}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
         </div>
         <button
           type="button"
@@ -181,7 +195,7 @@ export function RouteAnalysisPanel({
                           <td className="py-3 pr-4 font-medium text-slate-200">
                             {point.sample.label}
                           </td>
-                          <td className="py-3 pr-4 text-slate-400">{formatTime(point.weather.time)}</td>
+                          <td className="py-3 pr-4 text-slate-400">{formatOsloTime(point.weather.time)}</td>
                           <td className="py-3 pr-4 text-slate-400">
                             {point.weather.windSpeed.toFixed(1)} m/s
                           </td>
