@@ -170,7 +170,6 @@ export default function HomePage() {
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
   const deferredStopQuery = useDeferredValue(stopQuery);
-  const areaSectionRef = useRef<HTMLElement | null>(null);
   const startSectionRef = useRef<HTMLDivElement | null>(null);
   const weatherSectionRef = useRef<HTMLElement | null>(null);
   const routeSectionRef = useRef<HTMLElement | null>(null);
@@ -202,7 +201,6 @@ export default function HomePage() {
       selected.lat === selectedRouteStart.lat &&
       selected.lon === selectedRouteStart.lon
   );
-  const step4Completed = Boolean(routeAnalysis);
 
   function scrollToSection(ref: { current: HTMLElement | HTMLDivElement | null }): void {
     window.setTimeout(() => {
@@ -556,7 +554,10 @@ export default function HomePage() {
     };
   }, [deferredStopQuery]);
 
-  const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
+  const loadWeatherForPlace = useCallback(async (
+    place: GeocodeResult,
+    options?: { focusForecastSection?: boolean }
+  ): Promise<void> => {
     const flowVersion = flowVersionRef.current;
     const controller = new AbortController();
     weatherAbortRef.current?.abort();
@@ -591,6 +592,12 @@ export default function HomePage() {
       setWeather(payload);
       setResults([]);
       setAddressResults([]);
+
+      if (options?.focusForecastSection) {
+        setActiveTab("forecast");
+        setForecastRange("24h");
+        scrollToSection(weatherSectionRef);
+      }
     } catch (caughtError) {
       if (caughtError instanceof Error && caughtError.name === "AbortError") {
         return;
@@ -978,8 +985,7 @@ export default function HomePage() {
       </section>
 
       <section className="rs-surface p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-100">Trinn for trinn</h2>
+        <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={resetFlow}
@@ -988,46 +994,10 @@ export default function HomePage() {
             Start på nytt
           </button>
         </div>
-        <ol className="mt-3 grid gap-2 md:grid-cols-4">
-          {[
-            {
-              title: "1) Velg område",
-              help: "Finn byen eller området du skal sykle i.",
-              done: step1Completed
-            },
-            {
-              title: "2) Velg startpunkt",
-              help: "Velg hvor turen starter.",
-              done: step2Completed
-            },
-            {
-              title: "3) Se vær",
-              help: "Sjekk værscore før du planlegger.",
-              done: step3Completed
-            },
-            {
-              title: "4) Analyser rute",
-              help: "Legg inn stopp og se beste tidspunkt.",
-              done: step4Completed
-            }
-          ].map((step) => (
-            <li
-              key={step.title}
-              className={`rounded-lg border p-3 ${
-                step.done
-                  ? "border-emerald-500/40 bg-emerald-900/20"
-                  : "border-slate-700 bg-slate-800/50 text-slate-300"
-              }`}
-            >
-              <p className="text-sm font-medium">{step.title}</p>
-              <p className="mt-1 text-xs text-slate-400">{step.help}</p>
-            </li>
-          ))}
-        </ol>
       </section>
 
       {activeTab === "forecast" && (
-      <section ref={areaSectionRef} className="rs-surface p-6">
+      <section className="rs-surface p-6">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -1069,7 +1039,7 @@ export default function HomePage() {
                 className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
                 onClick={() => {
                   chooseArea(city);
-                  void loadWeatherForPlace(city);
+                  void loadWeatherForPlace(city, { focusForecastSection: true });
                 }}
                 disabled={weatherLoading || addressLoading || placeLoading}
               >
@@ -1090,7 +1060,7 @@ export default function HomePage() {
                   className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
                   onClick={() => {
                     chooseArea(place);
-                    void loadWeatherForPlace(place);
+                    void loadWeatherForPlace(place, { focusForecastSection: true });
                   }}
                 >
                   {place.name}

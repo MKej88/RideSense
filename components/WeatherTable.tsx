@@ -145,21 +145,6 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-100 sm:text-sm">
-        <p className="mb-2 font-medium text-slate-200">Forklaring:</p>
-        <ul className="flex flex-wrap gap-2">
-          <li className="rounded-md border border-orange-500/60 bg-orange-500/20 px-2 py-1">
-            Høy vind ({HIGH_WIND_THRESHOLD.toFixed(1)}+ m/s)
-          </li>
-          <li className="rounded-md border border-cyan-500/60 bg-cyan-500/20 px-2 py-1">
-            Høy nedbør ({HIGH_PRECIPITATION_THRESHOLD.toFixed(1)}+ mm)
-          </li>
-          <li className="rounded-md border border-rose-500/70 bg-rose-500/20 px-2 py-1">
-            Farlige vindkast ({DANGEROUS_WIND_GUST_THRESHOLD.toFixed(1)}+ m/s)
-          </li>
-        </ul>
-      </div>
-
       <div className="grid gap-3 lg:hidden">
         {hours.map((hour) => {
           const symbolEmoji = getSymbolEmoji(hour.symbolCode);
