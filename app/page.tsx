@@ -184,6 +184,9 @@ export default function HomePage() {
   const prevStep2Ref = useRef(false);
   const prevStep3Ref = useRef(false);
   const flowVersionRef = useRef(0);
+  const placeAbortRef = useRef<AbortController | null>(null);
+  const addressAbortRef = useRef<AbortController | null>(null);
+  const stopAbortRef = useRef<AbortController | null>(null);
   const weatherAbortRef = useRef<AbortController | null>(null);
   const routeAbortRef = useRef<AbortController | null>(null);
 
@@ -207,8 +210,14 @@ export default function HomePage() {
 
   function resetFlow(): void {
     flowVersionRef.current += 1;
+    placeAbortRef.current?.abort();
+    addressAbortRef.current?.abort();
+    stopAbortRef.current?.abort();
     weatherAbortRef.current?.abort();
     routeAbortRef.current?.abort();
+    placeAbortRef.current = null;
+    addressAbortRef.current = null;
+    stopAbortRef.current = null;
     weatherAbortRef.current = null;
     routeAbortRef.current = null;
     setQuery("");
@@ -256,6 +265,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    const flowVersion = flowVersionRef.current;
     const trimmedQuery = deferredQuery.trim();
 
     if (isSameAreaQuery(trimmedQuery, selectedArea)) {
@@ -272,7 +282,13 @@ export default function HomePage() {
     let active = true;
     const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
     const controller = new AbortController();
+    placeAbortRef.current?.abort();
+    placeAbortRef.current = controller;
     const timeoutId = window.setTimeout(async () => {
+      if (flowVersion !== flowVersionRef.current || placeAbortRef.current !== controller) {
+        return;
+      }
+
       const cachedResults = placeCacheRef.current.get(cacheKey);
 
       if (cachedResults) {
@@ -295,7 +311,11 @@ export default function HomePage() {
           throw new Error(payload.error || "Klarte ikke å søke sted.");
         }
 
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          placeAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -303,7 +323,11 @@ export default function HomePage() {
         placeCacheRef.current.set(cacheKey, nextResults);
         setResults(nextResults);
       } catch (caughtError) {
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          placeAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -314,7 +338,12 @@ export default function HomePage() {
         setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stedsøk.");
         setResults([]);
       } finally {
-        if (active) {
+        if (
+          active &&
+          flowVersion === flowVersionRef.current &&
+          placeAbortRef.current === controller
+        ) {
+          placeAbortRef.current = null;
           setPlaceLoading(false);
         }
       }
@@ -323,12 +352,16 @@ export default function HomePage() {
     return () => {
       active = false;
       controller.abort();
+      if (placeAbortRef.current === controller) {
+        placeAbortRef.current = null;
+      }
       window.clearTimeout(timeoutId);
       setPlaceLoading(false);
     };
   }, [deferredQuery, selectedArea]);
 
   useEffect(() => {
+    const flowVersion = flowVersionRef.current;
     const trimmedQuery = deferredAddressQuery.trim();
     const scopedArea = activeTab === "routes" ? null : selectedArea;
 
@@ -343,7 +376,13 @@ export default function HomePage() {
     const contextPart = scopedArea ? scopedArea.name : "norge";
     const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${contextPart.toLocaleLowerCase("nb-NO")}`;
     const controller = new AbortController();
+    addressAbortRef.current?.abort();
+    addressAbortRef.current = controller;
     const timeoutId = window.setTimeout(async () => {
+      if (flowVersion !== flowVersionRef.current || addressAbortRef.current !== controller) {
+        return;
+      }
+
       const cachedResults = addressCacheRef.current.get(cacheKey);
 
       if (cachedResults) {
@@ -371,7 +410,11 @@ export default function HomePage() {
           throw new Error(payload.error || "Klarte ikke å søke adresse.");
         }
 
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          addressAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -379,7 +422,11 @@ export default function HomePage() {
         addressCacheRef.current.set(cacheKey, nextResults);
         setAddressResults(nextResults);
       } catch (caughtError) {
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          addressAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -392,7 +439,12 @@ export default function HomePage() {
         );
         setAddressResults([]);
       } finally {
-        if (active) {
+        if (
+          active &&
+          flowVersion === flowVersionRef.current &&
+          addressAbortRef.current === controller
+        ) {
+          addressAbortRef.current = null;
           setAddressLoading(false);
         }
       }
@@ -401,12 +453,16 @@ export default function HomePage() {
     return () => {
       active = false;
       controller.abort();
+      if (addressAbortRef.current === controller) {
+        addressAbortRef.current = null;
+      }
       window.clearTimeout(timeoutId);
     };
   }, [activeTab, deferredAddressQuery, areaContext, selectedArea]);
 
 
   useEffect(() => {
+    const flowVersion = flowVersionRef.current;
     const trimmedQuery = deferredStopQuery.trim();
 
     if (trimmedQuery.length < 2) {
@@ -419,7 +475,13 @@ export default function HomePage() {
     let active = true;
     const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
     const controller = new AbortController();
+    stopAbortRef.current?.abort();
+    stopAbortRef.current = controller;
     const timeoutId = window.setTimeout(async () => {
+      if (flowVersion !== flowVersionRef.current || stopAbortRef.current !== controller) {
+        return;
+      }
+
       const cachedResults = stopCacheRef.current.get(cacheKey);
 
       if (cachedResults) {
@@ -442,7 +504,11 @@ export default function HomePage() {
           throw new Error(payload.error || "Klarte ikke å søke stoppadresse.");
         }
 
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          stopAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -450,7 +516,11 @@ export default function HomePage() {
         stopCacheRef.current.set(cacheKey, nextResults);
         setStopResults(nextResults);
       } catch (caughtError) {
-        if (!active) {
+        if (
+          !active ||
+          flowVersion !== flowVersionRef.current ||
+          stopAbortRef.current !== controller
+        ) {
           return;
         }
 
@@ -463,7 +533,12 @@ export default function HomePage() {
         );
         setStopResults([]);
       } finally {
-        if (active) {
+        if (
+          active &&
+          flowVersion === flowVersionRef.current &&
+          stopAbortRef.current === controller
+        ) {
+          stopAbortRef.current = null;
           setStopLoading(false);
         }
       }
@@ -472,6 +547,9 @@ export default function HomePage() {
     return () => {
       active = false;
       controller.abort();
+      if (stopAbortRef.current === controller) {
+        stopAbortRef.current = null;
+      }
       window.clearTimeout(timeoutId);
     };
   }, [deferredStopQuery]);
@@ -750,6 +828,9 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
+      placeAbortRef.current?.abort();
+      addressAbortRef.current?.abort();
+      stopAbortRef.current?.abort();
       weatherAbortRef.current?.abort();
       routeAbortRef.current?.abort();
     };
