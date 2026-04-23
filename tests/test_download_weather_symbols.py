@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
+import sys
 from typing import Any
 
-import scripts.download_weather_symbols as weather_symbols
+
+def _load_weather_symbols_module() -> Any:
+    module_path = Path(__file__).resolve().parent.parent / "scripts" / "download_weather_symbols.py"
+    spec = importlib.util.spec_from_file_location("download_weather_symbols", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load module spec for {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+weather_symbols = _load_weather_symbols_module()
 
 
 class _FakeResponse:
