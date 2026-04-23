@@ -1,5 +1,8 @@
 import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
+import { WeatherConditionBadge } from "@/components/WeatherConditionBadge";
+import { WeatherLegend } from "@/components/WeatherLegend";
+import { getWeatherConditionVisual } from "@/lib/weather-condition";
 
 import { formatOsloDayAndTime } from "@/lib/time-format";
 
@@ -69,40 +72,6 @@ function formatSymbol(symbolCode?: string): string {
     .join(" ");
 }
 
-function getSymbolEmoji(symbolCode?: string): string {
-  const symbol = (symbolCode || "").toLowerCase();
-
-  if (symbol.includes("thunder")) {
-    return "⛈️";
-  }
-
-  if (symbol.includes("snow")) {
-    return "❄️";
-  }
-
-  if (symbol.includes("rain") || symbol.includes("showers")) {
-    return "🌧️";
-  }
-
-  if (symbol.includes("fog")) {
-    return "🌫️";
-  }
-
-  if (symbol.includes("partlycloudy") || symbol.includes("fair")) {
-    return "⛅";
-  }
-
-  if (symbol.includes("cloudy")) {
-    return "☁️";
-  }
-
-  if (symbol.includes("clearsky")) {
-    return symbol.includes("night") ? "🌙" : "☀️";
-  }
-
-  return "🌤️";
-}
-
 function getWindGustWarning(windGust?: number): string | null {
   if (windGust === undefined) {
     return null;
@@ -145,9 +114,10 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
 
   return (
     <div className="space-y-4">
+      <WeatherLegend />
       <div className="grid gap-3 lg:hidden">
         {hours.map((hour) => {
-          const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+          const conditionVisual = getWeatherConditionVisual(hour);
           const windGustWarning = getWindGustWarning(hour.windGust);
           const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
 
@@ -227,7 +197,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                   <div className="flex items-start justify-between gap-4">
                     <dt>Symbol</dt>
                     <dd className="text-right" title={formatSymbol(hour.symbolCode)}>
-                      {symbolEmoji} {formatSymbol(hour.symbolCode)}
+                      <WeatherConditionBadge visual={conditionVisual} compact />
                     </dd>
                   </div>
                   {showTailwindColumn ? (
@@ -255,7 +225,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <th className="px-4 py-3">Temp</th>
               <th className="px-4 py-3">Nedbør</th>
               <th className="px-4 py-3">Skydekke</th>
-              <th className="px-4 py-3">Symbol</th>
+              <th className="px-4 py-3">Kategori</th>
               <th className="px-4 py-3">Vind</th>
               <th className="px-4 py-3">Vindkast</th>
               <th className="px-4 py-3">Vindretning</th>
@@ -265,7 +235,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
           </thead>
           <tbody>
             {hours.map((hour) => {
-              const symbolEmoji = getSymbolEmoji(hour.symbolCode);
+              const conditionVisual = getWeatherConditionVisual(hour);
               const windGustWarning = getWindGustWarning(hour.windGust);
               const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
               const hasAnyRisk = hasHighWind || hasHighPrecipitation || hasDangerousWindGust;
@@ -288,13 +258,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                   </td>
                   <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                   <td className="px-4 py-3">
-                    <div
-                      className="flex items-center justify-center text-2xl"
-                      title={formatSymbol(hour.symbolCode)}
-                      aria-label={formatSymbol(hour.symbolCode)}
-                    >
-                      {symbolEmoji}
-                    </div>
+                    <WeatherConditionBadge visual={conditionVisual} compact />
                   </td>
                   <td
                     className={`px-4 py-3 ${

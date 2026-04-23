@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { ScoreBadge } from "@/components/ScoreBadge";
+import { WeatherConditionBadge } from "@/components/WeatherConditionBadge";
+import { WeatherLegend } from "@/components/WeatherLegend";
 import { RouteAnalysisResponse } from "@/lib/types";
 import { formatOsloDateTime, formatOsloTime, isOlderThanMinutes } from "@/lib/time-format";
+import { getWeatherConditionVisual } from "@/lib/weather-condition";
 
 interface RouteAnalysisPanelProps {
   data: RouteAnalysisResponse | null;
@@ -75,6 +78,7 @@ export function RouteAnalysisPanel({
 
       {data && !loading && !error && (
         <div className="mt-6 space-y-6">
+          <WeatherLegend />
           {data.bestRouteExplanation && (
             <div className="rounded-xl border border-emerald-400/45 bg-emerald-900/25 p-4">
               <p className="text-sm font-medium text-emerald-200">Beste rute akkurat nå</p>
@@ -85,6 +89,14 @@ export function RouteAnalysisPanel({
           <div className="grid gap-3 lg:grid-cols-3">
             {data.routes.map((routeAnalysis) => {
               const selected = routeAnalysis.route.id === selectedRouteId;
+              const categoryVisual =
+                routeAnalysis.sampledPoints.length > 0
+                  ? getWeatherConditionVisual(routeAnalysis.sampledPoints[0].weather)
+                  : getWeatherConditionVisual({
+                      symbolCode: undefined,
+                      windSpeed: routeAnalysis.summary.averageWindSpeed,
+                      windGust: undefined
+                    });
 
               return (
                 <button
@@ -99,10 +111,13 @@ export function RouteAnalysisPanel({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-lg font-semibold">{routeAnalysis.route.shortName}</p>
-                    <ScoreBadge
-                      label={routeAnalysis.summary.scoreLabel}
-                      score={routeAnalysis.summary.score}
-                    />
+                    <div className="flex items-center gap-2">
+                      <WeatherConditionBadge visual={categoryVisual} compact />
+                      <ScoreBadge
+                        label={routeAnalysis.summary.scoreLabel}
+                        score={routeAnalysis.summary.score}
+                      />
+                    </div>
                   </div>
                   <p className={`mt-3 text-sm ${selected ? "text-slate-200" : "text-slate-400"}`}>
                     {routeAnalysis.route.description}
@@ -184,6 +199,7 @@ export function RouteAnalysisPanel({
                       <tr>
                         <th className="pb-2 pr-4">Punkt</th>
                         <th className="pb-2 pr-4">Tid</th>
+                        <th className="pb-2 pr-4">Kategori</th>
                         <th className="pb-2 pr-4">Vind</th>
                         <th className="pb-2 pr-4">Nedbør</th>
                         <th className="pb-2">Score</th>
@@ -196,6 +212,12 @@ export function RouteAnalysisPanel({
                             {point.sample.label}
                           </td>
                           <td className="py-3 pr-4 text-slate-400">{formatOsloTime(point.weather.time)}</td>
+                          <td className="py-3 pr-4 text-slate-400">
+                            <WeatherConditionBadge
+                              visual={getWeatherConditionVisual(point.weather)}
+                              compact
+                            />
+                          </td>
                           <td className="py-3 pr-4 text-slate-400">
                             {point.weather.windSpeed.toFixed(1)} m/s
                           </td>
