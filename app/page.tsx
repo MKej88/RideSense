@@ -10,6 +10,7 @@ import {
   isOlderThanMinutes,
   OSLO_TIME_ZONE
 } from "@/lib/time-format";
+import { ScoreBadge } from "@/components/ScoreBadge";
 
 interface ApiError {
   error: string;
@@ -95,6 +96,21 @@ function getNextHourTimestamp(nowMs: number): number {
   return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
 }
 
+function getCurrentOrNextHour<T extends { time: string }>(hours: T[], referenceMs: number): T | null {
+  if (hours.length === 0) {
+    return null;
+  }
+
+  const nextHourTs = getNextHourTimestamp(referenceMs);
+  const nextHour = hours.find((hour) => new Date(hour.time).getTime() >= nextHourTs);
+
+  if (nextHour) {
+    return nextHour;
+  }
+
+  return hours[hours.length - 1] || null;
+}
+
 function buildBestWindowFromHours(
   hours: WeatherResponse["hours"],
   analysisRunMs: number
@@ -173,8 +189,10 @@ export default function HomePage() {
   const deferredAddressQuery = useDeferredValue(addressQuery);
   const deferredStopQuery = useDeferredValue(stopQuery);
   const startSectionRef = useRef<HTMLDivElement | null>(null);
+  const locationSectionRef = useRef<HTMLElement | null>(null);
   const weatherSectionRef = useRef<HTMLElement | null>(null);
   const routeSectionRef = useRef<HTMLElement | null>(null);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
   const prevStep1Ref = useRef(false);
   const prevStep2Ref = useRef(false);
   const prevStep3Ref = useRef(false);
@@ -236,6 +254,19 @@ export default function HomePage() {
     window.setTimeout(() => {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 120);
+  }
+
+  function activateTabAndScroll(
+    tab: "forecast" | "routes",
+    ref: { current: HTMLElement | HTMLDivElement | null }
+  ): void {
+    if (activeTab === tab) {
+      scrollToSection(ref);
+      return;
+    }
+
+    setActiveTab(tab);
+    scrollToSection(ref);
   }
 
   function resetFlow(): void {
@@ -857,6 +888,44 @@ export default function HomePage() {
     [activeTab, selected, selectedRouteStart]
   );
 
+  const compactBestWindow = useMemo(() => {
+    if (routeAnalysis) {
+      return routeAnalysis.bestWindowNext24h || routeAnalysis.bestWindowNext7d;
+    }
+
+    return visibleBestWindow24h || visibleBestWindow7d;
+  }, [routeAnalysis, visibleBestWindow24h, visibleBestWindow7d]);
+
+  const compactScoreHour = useMemo(() => {
+    if (routeAnalysis?.hours.length) {
+      return getCurrentOrNextHour(routeAnalysis.hours, staleCheckTick);
+    }
+
+    if (!weather) {
+      return null;
+    }
+
+    return getCurrentOrNextHour(weather.hours, staleCheckTick);
+  }, [routeAnalysis, staleCheckTick, weather]);
+
+  const compactSelectionLabel = useMemo(() => {
+    if (routeAnalysis) {
+      return `${routeAnalysis.route.startLabel} → ${routeAnalysis.route.endLabel}`;
+    }
+
+    if (selected?.name) {
+      return selected.name;
+    }
+
+    if (weather?.locationLabel) {
+      return weather.locationLabel;
+    }
+
+    return null;
+  }, [routeAnalysis, selected, weather]);
+
+  const shouldShowCompactPanel = Boolean(weather || routeAnalysis);
+
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
       const movedPlace: GeocodeResult = {
@@ -1030,8 +1099,71 @@ export default function HomePage() {
         </div>
       </section>
 
+      {shouldShowCompactPanel && (
+        <section className="rs-surface sticky top-3 z-20 p-4">
+          <div className="grid gap-4 md:grid-cols-[1.1fr_1fr_auto] md:items-center">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Valgt sted/rute</p>
+              <p className="mt-1 text-sm font-medium text-slate-100">
+                {compactSelectionLabel || "Ikke valgt"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Beste vindu</p>
+              <p className="mt-1 text-sm font-medium text-slate-100">
+                {compactBestWindow
+                  ? `${formatOsloDateTime(compactBestWindow.startTime)}–${formatOsloDateTime(compactBestWindow.endTime)}`
+                  : "Ikke tilgjengelig ennå"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Score-status nå</p>
+              <div className="mt-1">
+                {compactScoreHour ? (
+                  <ScoreBadge label={compactScoreHour.scoreLabel} score={compactScoreHour.score} />
+                ) : (
+                  <span className="text-sm text-slate-400">Ingen score ennå</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              onClick={() => activateTabAndScroll("forecast", locationSectionRef)}
+            >
+              Til stedvalg
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              onClick={() => activateTabAndScroll("forecast", weatherSectionRef)}
+            >
+              Til vær
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              onClick={() => activateTabAndScroll("routes", routeSectionRef)}
+            >
+              Til ruteanalyse
+            </button>
+            {mapAnchor ? (
+              <button
+                type="button"
+                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                onClick={() => activateTabAndScroll("routes", mapSectionRef)}
+              >
+                Til kart
+              </button>
+            ) : null}
+          </div>
+        </section>
+      )}
+
       {activeTab === "forecast" && (
-      <section className="rs-surface p-6">
+      <section ref={locationSectionRef} className="rs-surface p-6">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
         <p className="mt-1 text-sm text-slate-400">
           Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
@@ -1524,18 +1656,20 @@ export default function HomePage() {
       )}
 
       {mapAnchor && (
-        <LocationMap
-          lat={mapAnchor.lat}
-          lon={mapAnchor.lon}
-          label={mapAnchor.name}
-          onMarkerMoved={onMarkerMoved}
-          routeName={routeAnalysis?.route.shortName || null}
-          routePoints={
-            routeAnalysis?.route.description.includes("uten veigeometri")
-              ? []
-              : routeAnalysis?.route.points || []
-          }
-        />
+        <section ref={mapSectionRef}>
+          <LocationMap
+            lat={mapAnchor.lat}
+            lon={mapAnchor.lon}
+            label={mapAnchor.name}
+            onMarkerMoved={onMarkerMoved}
+            routeName={routeAnalysis?.route.shortName || null}
+            routePoints={
+              routeAnalysis?.route.description.includes("uten veigeometri")
+                ? []
+                : routeAnalysis?.route.points || []
+            }
+          />
+        </section>
       )}
     </main>
   );
