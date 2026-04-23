@@ -852,12 +852,23 @@ export default function HomePage() {
       return routeAnalysis.hours[0];
     }
 
-    if (displayedForecastHours.length) {
-      return displayedForecastHours[0];
+    if (!weather || analysisRunMs === null) {
+      return null;
+    }
+
+    const nextHourTs = getNextHourTimestamp(analysisRunMs);
+    const nextHour = weather.hours.find((hour) => new Date(hour.time).getTime() >= nextHourTs);
+
+    if (nextHour) {
+      return nextHour;
+    }
+
+    if (weather.hours.length) {
+      return weather.hours[0];
     }
 
     return null;
-  }, [displayedForecastHours, routeAnalysis]);
+  }, [analysisRunMs, routeAnalysis, weather]);
 
   const compactSelectionLabel = useMemo(() => {
     if (routeAnalysis) {
