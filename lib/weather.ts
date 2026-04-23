@@ -167,6 +167,7 @@ export async function fetchForecastForLocation(
   return {
     locationLabel,
     timezone: "Europe/Oslo",
+    updatedAt: payload?.properties?.meta?.updated_at || new Date().toISOString(),
     hours: scoredHours,
     bestWindowToday: findBestWindowToday(scoredHours),
     bestWindowNext7Days: findBestWindowNext7Days(scoredHours),

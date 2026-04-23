@@ -3,6 +3,12 @@
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { BestWindow, GeocodeResult, RouteTimeAnalysisResponse, WeatherResponse } from "@/lib/types";
+import {
+  formatOsloDateTime,
+  getOsloDayKey,
+  isOlderThanMinutes,
+  OSLO_TIME_ZONE
+} from "@/lib/time-format";
 
 interface ApiError {
   error: string;
@@ -48,7 +54,7 @@ const QUICK_CITIES: GeocodeResult[] = [
 ];
 
 const osloDayFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Oslo",
+  timeZone: OSLO_TIME_ZONE,
   year: "numeric",
   month: "2-digit",
   day: "2-digit"
@@ -57,7 +63,7 @@ const osloDayFormatter = new Intl.DateTimeFormat("en-CA", {
 const osloHourFormatter = new Intl.DateTimeFormat("nb-NO", {
   hour: "2-digit",
   hour12: false,
-  timeZone: "Europe/Oslo"
+  timeZone: OSLO_TIME_ZONE
 });
 
 function getAreaContextLabel(place: GeocodeResult): string {
@@ -74,27 +80,12 @@ function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
   return query.trim() === getAreaContextLabel(place);
 }
 
-function getOsloDayKey(time: string): string {
-  return osloDayFormatter.format(new Date(time));
-}
-
 function getOsloHour(time: string): number {
   return Number(osloHourFormatter.format(new Date(time)));
 }
 
 function isCyclingHour(time: string): boolean {
   return getOsloHour(time) >= 6;
-}
-
-function formatUpdatedAt(time: string): string {
-  return new Date(time).toLocaleString("nb-NO", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Europe/Oslo"
-  });
 }
 
 function getNextHourTimestamp(nowMs: number): number {
@@ -527,7 +518,7 @@ export default function HomePage() {
         weekday: "long",
         day: "2-digit",
         month: "2-digit",
-        timeZone: "Europe/Oslo"
+        timeZone: OSLO_TIME_ZONE
       }),
       hours,
       bestWindow: buildBestWindowFromHours(hours, analysisRunMs)
@@ -594,8 +585,24 @@ export default function HomePage() {
       return null;
     }
 
-    return weather.observationSummary.observedAt || weather.hours[0]?.time || null;
+    return weather.updatedAt || weather.observationSummary.observedAt || weather.hours[0]?.time || null;
   }, [weather]);
+
+  const isWeatherDataStale = useMemo(() => {
+    if (!updatedWeatherAt) {
+      return false;
+    }
+
+    return isOlderThanMinutes(updatedWeatherAt);
+  }, [updatedWeatherAt]);
+
+  const isRouteDataStale = useMemo(() => {
+    if (!routeAnalysis) {
+      return false;
+    }
+
+    return isOlderThanMinutes(routeAnalysis.analyzedAt);
+  }, [routeAnalysis]);
   const mapAnchor = useMemo(
     () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
     [activeTab, selected, selectedRouteStart]
@@ -880,8 +887,8 @@ export default function HomePage() {
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               {updatedWeatherAt && (
-                <p className="text-sm text-slate-300">
-                  Oppdatert værdata: {formatUpdatedAt(updatedWeatherAt)}
+                <p className={`text-sm ${isWeatherDataStale ? "text-amber-300" : "text-slate-300"}`}>
+                  Sist oppdatert værdata: {formatOsloDateTime(updatedWeatherAt)}
                 </p>
               )}
               <button
@@ -899,6 +906,7 @@ export default function HomePage() {
                 Oppdater værdata
               </button>
             </div>
+            <p className="mt-1 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
@@ -1053,6 +1061,10 @@ export default function HomePage() {
 
           {routeAnalysis && (
             <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+              <p className={`text-sm ${isRouteDataStale ? "text-amber-300" : "text-slate-300"}`}>
+                Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
+              </p>
+              <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg bg-slate-800/60 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">
