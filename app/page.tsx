@@ -867,12 +867,12 @@ export default function HomePage() {
       return getCurrentOrNextHour(routeAnalysis.hours, staleCheckTick);
     }
 
-    if (!weather || analysisRunMs === null) {
+    if (!weather) {
       return null;
     }
 
-    return getCurrentOrNextHour(weather.hours, analysisRunMs);
-  }, [analysisRunMs, routeAnalysis, staleCheckTick, weather]);
+    return getCurrentOrNextHour(weather.hours, staleCheckTick);
+  }, [routeAnalysis, staleCheckTick, weather]);
 
   const compactSelectionLabel = useMemo(() => {
     if (routeAnalysis) {
