@@ -136,6 +136,7 @@ function buildBestWindowFromHours(
 }
 
 export default function HomePage() {
+  const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
@@ -167,6 +168,14 @@ export default function HomePage() {
   const deferredQuery = useDeferredValue(query);
   const deferredAddressQuery = useDeferredValue(addressQuery);
   const deferredStopQuery = useDeferredValue(stopQuery);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStaleCheckTick(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
 
@@ -593,16 +602,16 @@ export default function HomePage() {
       return false;
     }
 
-    return isOlderThanMinutes(updatedWeatherAt);
-  }, [updatedWeatherAt]);
+    return isOlderThanMinutes(updatedWeatherAt, undefined, staleCheckTick);
+  }, [staleCheckTick, updatedWeatherAt]);
 
   const isRouteDataStale = useMemo(() => {
     if (!routeAnalysis) {
       return false;
     }
 
-    return isOlderThanMinutes(routeAnalysis.analyzedAt);
-  }, [routeAnalysis]);
+    return isOlderThanMinutes(routeAnalysis.analyzedAt, undefined, staleCheckTick);
+  }, [routeAnalysis, staleCheckTick]);
   const mapAnchor = useMemo(
     () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
     [activeTab, selected, selectedRouteStart]

@@ -47,9 +47,10 @@ export function getOsloDayKey(value: string | number | Date): string {
 
 export function isOlderThanMinutes(
   value: string | number | Date,
-  thresholdMinutes: number = STALE_MINUTES_THRESHOLD
+  thresholdMinutes: number = STALE_MINUTES_THRESHOLD,
+  now: string | number | Date = Date.now()
 ): boolean {
-  const ageMs = Date.now() - asDate(value).getTime();
+  const ageMs = asDate(now).getTime() - asDate(value).getTime();
   return ageMs > thresholdMinutes * 60 * 1000;
 }
 
