@@ -139,7 +139,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
           return (
             <article
               key={hour.time}
-              className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-base leading-relaxed"
+              className="rs-card text-base leading-relaxed"
             >
               <div className="flex items-start justify-between gap-3">
                 <p className="font-semibold text-slate-100">{formatHour(hour.time)}</p>
@@ -212,9 +212,9 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
         })}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm lg:block">
+      <div className="rs-panel hidden overflow-x-auto rounded-xl shadow-sm lg:block">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-800 text-left text-slate-300">
+          <thead className="bg-slate-800/90 text-left text-slate-200">
             <tr>
               <th className="px-4 py-3">Tid</th>
               <th className="px-4 py-3">Temp</th>

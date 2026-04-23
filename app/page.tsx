@@ -622,7 +622,7 @@ export default function HomePage() {
   );
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-4 py-8 md:gap-10">
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
@@ -729,7 +729,7 @@ export default function HomePage() {
       </section>
 
       {activeTab === "forecast" && (
-      <section className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700">
+      <section className="rs-panel rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -820,12 +820,12 @@ export default function HomePage() {
       )}
 
       {weatherLoading && activeTab === "forecast" && (
-        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
+        <section className="rs-panel rounded-xl p-6 text-slate-300">Laster data …</section>
       )}
 
       {weather && activeTab === "forecast" && (
-        <section className="space-y-4">
-          <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+        <section className="space-y-6">
+          <div className="rs-panel rounded-xl p-4">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
@@ -902,7 +902,7 @@ export default function HomePage() {
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-sm">
+            <div className="rs-panel-soft overflow-x-auto rounded-xl p-2">
               <div className="flex min-w-max gap-2">
                 {forecastDays.map((day) => (
                   <button
@@ -938,8 +938,8 @@ export default function HomePage() {
       )}
 
       {activeTab === "routes" && (
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm">
+        <section className="space-y-6">
+          <div className="rs-panel rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
               Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
@@ -947,7 +947,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div className="rs-card">
                 <h3 className="text-base font-semibold text-slate-100">Startadresse</h3>
                 <input
                   className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
@@ -985,7 +985,7 @@ export default function HomePage() {
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div className="rs-card">
                 <h3 className="text-base font-semibold text-slate-100">Stoppadresse</h3>
                 <input
                   className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
@@ -1024,12 +1024,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-slate-800/60 p-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rs-panel-soft rounded-lg p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Start</p>
                 <p className="mt-1 text-sm font-medium text-slate-100">{selectedRouteStart?.name || "Ikke valgt"}</p>
               </div>
-              <div className="rounded-lg bg-slate-800/60 p-3">
+              <div className="rs-panel-soft rounded-lg p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Stopp</p>
                 <p className="mt-1 text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
               </div>
@@ -1052,19 +1052,19 @@ export default function HomePage() {
           )}
 
           {routeAnalysis && (
-            <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-slate-800/60 p-3">
+            <section className="rs-panel space-y-6 rounded-xl p-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rs-panel-soft rounded-lg p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">
                     {routeAnalysis.route.isRoundTrip ? "Distanse tur/retur" : "Distanse en vei"}
                   </p>
                   <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.distanceKm} km</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/60 p-3">
+                <div className="rs-panel-soft rounded-lg p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">En vei</p>
                   <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.oneWayDistanceKm} km</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/60 p-3">
+                <div className="rs-panel-soft rounded-lg p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Prøvepunkter</p>
                   <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.sampledPoints.length}</p>
                 </div>

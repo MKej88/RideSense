@@ -1,6 +1,6 @@
 export function ScoreModelInfo() {
   return (
-    <section className="rounded-xl border border-cyan-300/25 bg-slate-900 p-4 text-slate-200 shadow-sm">
+    <section className="rs-panel rounded-xl p-4 text-slate-200 shadow-sm">
       <h3 className="text-base font-semibold text-cyan-100">Slik fungerer værscoren</h3>
       <p className="mt-2 text-sm text-slate-300">
         Perfekt score er <strong>100/100</strong> og betyr omtrent:{" "}
