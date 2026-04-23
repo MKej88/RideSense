@@ -22,6 +22,12 @@ const ROUTE_BADGE_SEVERITY: Record<WeatherConditionKey, number> = {
   fare: 3
 };
 
+const DEFAULT_ROUTE_BADGE_VISUAL = getWeatherConditionVisual({
+  symbolCode: undefined,
+  windSpeed: 0,
+  windGust: undefined
+});
+
 export function RouteAnalysisPanel({
   data,
   loading,
@@ -96,19 +102,14 @@ export function RouteAnalysisPanel({
           <div className="grid gap-3 lg:grid-cols-3">
             {data.routes.map((routeAnalysis) => {
               const selected = routeAnalysis.route.id === selectedRouteId;
-              const categoryVisual = routeAnalysis.sampledPoints.reduce(
-                (currentWorst, sampledPoint) => {
-                  const nextVisual = getWeatherConditionVisual(sampledPoint.weather);
-                  return ROUTE_BADGE_SEVERITY[nextVisual.key] > ROUTE_BADGE_SEVERITY[currentWorst.key]
-                    ? nextVisual
-                    : currentWorst;
-                },
-                getWeatherConditionVisual({
-                  symbolCode: undefined,
-                  windSpeed: routeAnalysis.summary.averageWindSpeed,
-                  windGust: undefined
-                })
+              const sampledPointVisuals = routeAnalysis.sampledPoints.map((sampledPoint) =>
+                getWeatherConditionVisual(sampledPoint.weather)
               );
+              const categoryVisual = sampledPointVisuals.reduce((currentWorst, nextVisual) => {
+                return ROUTE_BADGE_SEVERITY[nextVisual.key] > ROUTE_BADGE_SEVERITY[currentWorst.key]
+                  ? nextVisual
+                  : currentWorst;
+              }, DEFAULT_ROUTE_BADGE_VISUAL);
 
               return (
                 <button
