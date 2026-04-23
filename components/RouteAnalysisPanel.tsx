@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { RouteAnalysisResponse } from "@/lib/types";
 import { formatOsloDateTime, formatOsloTime, isOlderThanMinutes } from "@/lib/time-format";
@@ -19,9 +20,19 @@ export function RouteAnalysisPanel({
   onSelectRoute,
   onRefresh
 }: RouteAnalysisPanelProps) {
+  const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStaleCheckTick(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const selectedRoute =
     data?.routes.find((route) => route.route.id === selectedRouteId) ?? data?.routes[0] ?? null;
-  const analysisIsStale = data ? isOlderThanMinutes(data.analyzedAt) : false;
+  const analysisIsStale = data ? isOlderThanMinutes(data.analyzedAt, 60, staleCheckTick) : false;
 
   return (
     <section className="rounded-xl bg-slate-900 p-6 shadow-sm">
