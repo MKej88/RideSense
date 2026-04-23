@@ -54,4 +54,22 @@ export function isOlderThanMinutes(
   return ageMs > thresholdMinutes * 60 * 1000;
 }
 
+export function formatAgeInMinutes(
+  value: string | number | Date,
+  now: string | number | Date = Date.now()
+): string {
+  const ageMs = Math.max(0, asDate(now).getTime() - asDate(value).getTime());
+  const ageMinutes = Math.floor(ageMs / (60 * 1000));
+
+  if (ageMinutes < 1) {
+    return "mindre enn 1 min";
+  }
+
+  if (ageMinutes === 1) {
+    return "1 min";
+  }
+
+  return `${ageMinutes} min`;
+}
+
 export { OSLO_TIME_ZONE, STALE_MINUTES_THRESHOLD };

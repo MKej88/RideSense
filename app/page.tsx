@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { BestWindow, GeocodeResult, RouteTimeAnalysisResponse, WeatherResponse } from "@/lib/types";
 import {
+  formatAgeInMinutes,
   formatOsloDateTime,
   getOsloDayKey,
   isOlderThanMinutes,
@@ -137,6 +138,7 @@ function buildBestWindowFromHours(
 
 export default function HomePage() {
   const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
+  const [staleThresholdMinutes, setStaleThresholdMinutes] = useState(60);
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
@@ -783,7 +785,15 @@ export default function HomePage() {
       return false;
     }
 
-    return isOlderThanMinutes(updatedWeatherAt, undefined, staleCheckTick);
+    return isOlderThanMinutes(updatedWeatherAt, staleThresholdMinutes, staleCheckTick);
+  }, [staleCheckTick, staleThresholdMinutes, updatedWeatherAt]);
+
+  const weatherAgeText = useMemo(() => {
+    if (!updatedWeatherAt) {
+      return null;
+    }
+
+    return `Oppdatert for ${formatAgeInMinutes(updatedWeatherAt, staleCheckTick)} siden`;
   }, [staleCheckTick, updatedWeatherAt]);
 
   const isRouteDataStale = useMemo(() => {
@@ -791,7 +801,15 @@ export default function HomePage() {
       return false;
     }
 
-    return isOlderThanMinutes(routeAnalysis.analyzedAt, undefined, staleCheckTick);
+    return isOlderThanMinutes(routeAnalysis.analyzedAt, staleThresholdMinutes, staleCheckTick);
+  }, [routeAnalysis, staleCheckTick, staleThresholdMinutes]);
+
+  const routeAnalysisAgeText = useMemo(() => {
+    if (!routeAnalysis) {
+      return null;
+    }
+
+    return `Oppdatert for ${formatAgeInMinutes(routeAnalysis.analyzedAt, staleCheckTick)} siden`;
   }, [routeAnalysis, staleCheckTick]);
   const mapAnchor = useMemo(
     () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
@@ -1159,11 +1177,34 @@ export default function HomePage() {
                 : "Viser utvidet prognose med beste tidsvindu opptil 7 dager frem i tid."}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              {updatedWeatherAt && (
-                <p className={`text-sm ${isWeatherDataStale ? "text-amber-300" : "text-slate-300"}`}>
+              {weatherAgeText ? (
+                <p className={`text-sm ${isWeatherDataStale ? "text-rose-300" : "text-emerald-300"}`}>
+                  {weatherAgeText}
+                </p>
+              ) : null}
+              {updatedWeatherAt ? (
+                <p className="text-xs text-slate-400">
                   Sist oppdatert værdata: {formatOsloDateTime(updatedWeatherAt)}
                 </p>
-              )}
+              ) : null}
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <span>Gammel data etter</span>
+                <select
+                  className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                  value={staleThresholdMinutes}
+                  onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
+                >
+                  <option value={30}>30 min</option>
+                  <option value={60}>60 min</option>
+                  <option value={120}>120 min</option>
+                </select>
+              </label>
+              <span
+                className="cursor-help text-xs text-slate-400"
+                title="Gammel data betyr at siste oppdatering er eldre enn valgt terskel. Da kan vær og ruteforhold ha endret seg, og du bør oppdatere før du sykler."
+              >
+                Hva betyr gammel data?
+              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -1364,9 +1405,34 @@ export default function HomePage() {
 
           {routeAnalysis && (
             <section className="rs-surface space-y-5 p-4">
-              <p className={`text-sm ${isRouteDataStale ? "text-amber-300" : "text-slate-300"}`}>
+              {routeAnalysisAgeText ? (
+                <p className={`text-sm ${isRouteDataStale ? "text-rose-300" : "text-emerald-300"}`}>
+                  {routeAnalysisAgeText}
+                </p>
+              ) : null}
+              <p className="text-xs text-slate-400">
                 Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
               </p>
+              <div className="-mt-2 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <span>Gammel data etter</span>
+                  <select
+                    className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                    value={staleThresholdMinutes}
+                    onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
+                  >
+                    <option value={30}>30 min</option>
+                    <option value={60}>60 min</option>
+                    <option value={120}>120 min</option>
+                  </select>
+                </label>
+                <span
+                  className="cursor-help text-xs text-slate-400"
+                  title="Gammel data betyr at siste analyse er eldre enn valgt terskel. Da kan vind, nedbør eller trafikkforhold ha endret seg siden analysen ble kjørt."
+                >
+                  Hva betyr gammel data?
+                </span>
+              </div>
               <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rs-surface-subtle rs-card-layout p-3">
