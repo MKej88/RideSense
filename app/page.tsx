@@ -853,7 +853,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-4 py-8 md:gap-12">
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
@@ -959,7 +959,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+      <section className="rs-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-100">Trinn for trinn</h2>
           <button
@@ -1009,10 +1009,7 @@ export default function HomePage() {
       </section>
 
       {activeTab === "forecast" && (
-      <section
-        ref={areaSectionRef}
-        className="rounded-2xl bg-slate-900 p-6 shadow-sm ring-1 ring-slate-700"
-      >
+      <section ref={areaSectionRef} className="rs-surface p-6">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
@@ -1107,8 +1104,8 @@ export default function HomePage() {
       )}
 
       {weather && activeTab === "forecast" && (
-        <section ref={weatherSectionRef} className="space-y-4">
-          <div className="rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+        <section ref={weatherSectionRef} className="space-y-6">
+          <div className="rs-surface p-4">
             <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
@@ -1222,10 +1219,10 @@ export default function HomePage() {
       )}
 
       {activeTab === "routes" && (
-        <section ref={routeSectionRef} className="space-y-4">
+        <section ref={routeSectionRef} className="space-y-6">
           <div
             ref={startSectionRef}
-            className={`rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm ${
+            className={`rs-surface p-5 ${
               step1Completed ? "" : "pointer-events-none opacity-45"
             }`}
           >
@@ -1239,7 +1236,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div className="rs-surface-subtle p-4">
                 <h3 className="text-base font-semibold text-slate-100">Startadresse</h3>
                 <input
                   className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
@@ -1277,7 +1274,7 @@ export default function HomePage() {
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div className="rs-surface-subtle p-4">
                 <h3 className="text-base font-semibold text-slate-100">Stoppadresse</h3>
                 <input
                   className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
@@ -1317,13 +1314,15 @@ export default function HomePage() {
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-slate-800/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Start</p>
-                <p className="mt-1 text-sm font-medium text-slate-100">{selectedRouteStart?.name || "Ikke valgt"}</p>
+              <div className="rs-surface-subtle rs-card-layout p-3">
+                <p className="rs-card-title">Start</p>
+                <p className="text-sm font-medium text-slate-100">
+                  {selectedRouteStart?.name || "Ikke valgt"}
+                </p>
               </div>
-              <div className="rounded-lg bg-slate-800/60 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Stopp</p>
-                <p className="mt-1 text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
+              <div className="rs-surface-subtle rs-card-layout p-3">
+                <p className="rs-card-title">Stopp</p>
+                <p className="text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
               </div>
             </div>
             <div className="mt-3">
@@ -1364,25 +1363,25 @@ export default function HomePage() {
           )}
 
           {routeAnalysis && (
-            <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
+            <section className="rs-surface space-y-5 p-4">
               <p className={`text-sm ${isRouteDataStale ? "text-amber-300" : "text-slate-300"}`}>
                 Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
               </p>
               <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-slate-800/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                <div className="rs-surface-subtle rs-card-layout p-3">
+                  <p className="rs-card-title">
                     {routeAnalysis.route.isRoundTrip ? "Distanse tur/retur" : "Distanse en vei"}
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.distanceKm} km</p>
+                  <p className="rs-card-metric">{routeAnalysis.route.distanceKm} km</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">En vei</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.route.oneWayDistanceKm} km</p>
+                <div className="rs-surface-subtle rs-card-layout p-3">
+                  <p className="rs-card-title">En vei</p>
+                  <p className="rs-card-metric">{routeAnalysis.route.oneWayDistanceKm} km</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/60 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Prøvepunkter</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-100">{routeAnalysis.sampledPoints.length}</p>
+                <div className="rs-surface-subtle rs-card-layout p-3">
+                  <p className="rs-card-title">Prøvepunkter</p>
+                  <p className="rs-card-metric">{routeAnalysis.sampledPoints.length}</p>
                 </div>
               </div>
               {!routeAnalysis.route.isRoundTrip ? (

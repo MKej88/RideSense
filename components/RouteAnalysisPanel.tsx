@@ -35,7 +35,7 @@ export function RouteAnalysisPanel({
   const analysisIsStale = data ? isOlderThanMinutes(data.analyzedAt, 60, staleCheckTick) : false;
 
   return (
-    <section className="rounded-xl bg-slate-900 p-6 shadow-sm">
+    <section className="rs-surface p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-100">Ruteanalyse</h2>
@@ -56,7 +56,7 @@ export function RouteAnalysisPanel({
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+          className="rounded-lg border border-slate-500 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-60"
           disabled={loading}
         >
           Oppdater analyse
@@ -64,7 +64,7 @@ export function RouteAnalysisPanel({
       </div>
 
       {loading && (
-        <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-sm text-slate-400">
+        <div className="rs-surface-subtle mt-4 p-4 text-sm text-slate-300">
           Analyserer ruter og henter værdata for prøvepunktene …
         </div>
       )}
@@ -74,9 +74,9 @@ export function RouteAnalysisPanel({
       )}
 
       {data && !loading && !error && (
-        <div className="mt-5 space-y-5">
+        <div className="mt-6 space-y-6">
           {data.bestRouteExplanation && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-4">
+            <div className="rounded-xl border border-emerald-400/45 bg-emerald-900/25 p-4">
               <p className="text-sm font-medium text-emerald-200">Beste rute akkurat nå</p>
               <p className="mt-1 text-base text-emerald-100">{data.bestRouteExplanation}</p>
             </div>
@@ -93,8 +93,8 @@ export function RouteAnalysisPanel({
                   onClick={() => onSelectRoute(routeAnalysis.route.id)}
                   className={`rounded-xl border p-4 text-left transition ${
                     selected
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-700 bg-slate-800/60 hover:border-slate-400"
+                      ? "border-cyan-300/35 bg-slate-900 text-white shadow-[0_8px_26px_-16px_rgba(34,211,238,0.7)]"
+                      : "border-slate-700 bg-slate-800/45 text-slate-100 hover:border-slate-500 hover:bg-slate-800/70"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -117,7 +117,7 @@ export function RouteAnalysisPanel({
 
           {selectedRoute && (
             <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-              <div className="rounded-xl border border-slate-700 p-4">
+              <div className="rs-surface-strong p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-xl font-semibold text-slate-100">{selectedRoute.route.shortName}</h3>
@@ -130,49 +130,49 @@ export function RouteAnalysisPanel({
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Startplass</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">Startplass</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.route.startLabel}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Sluttplass</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">Sluttplass</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.route.endLabel}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Lengde</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">Lengde</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.route.distanceKm} km
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">En vei</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">En vei</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.route.oneWayDistanceKm} km
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Snitt vind</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">Snitt vind</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.summary.averageWindSpeed} m/s
                     </p>
                   </div>
-                  <div className="rounded-lg bg-slate-800/60 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Snitt nedbør</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-100">
+                  <div className="rs-surface-subtle rs-card-layout p-3">
+                    <p className="rs-card-title">Snitt nedbør</p>
+                    <p className="rs-card-metric">
                       {selectedRoute.summary.averagePrecipitation} mm
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-700 p-4">
+              <div className="rs-surface p-4">
                 <h3 className="text-base font-semibold text-slate-100">Samplede punkter</h3>
                 <p className="mt-1 text-sm text-slate-400">
                   Hvert punkt bruker nærmeste tilgjengelige værtime fra MET.

@@ -39,7 +39,7 @@ export function BestWindowCard({
 }: BestWindowCardProps) {
   if (!bestWindow) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-sm">
+      <div className="rs-surface p-4">
         <h2 className="text-lg font-semibold">{title}</h2>
         <p className="mt-2 text-sm text-slate-400">{emptyMessage}</p>
       </div>
@@ -49,7 +49,7 @@ export function BestWindowCard({
   const averageLabel = scoreLabelFromAverage(bestWindow.averageScore);
 
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-sm">
+    <div className="rs-surface-strong p-4">
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-2 text-2xl font-bold text-slate-100">
         {formatBestWindowLabel(bestWindow.startTime, bestWindow.endTime, includeDay)}
