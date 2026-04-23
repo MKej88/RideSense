@@ -183,6 +183,9 @@ export default function HomePage() {
   const prevStep1Ref = useRef(false);
   const prevStep2Ref = useRef(false);
   const prevStep3Ref = useRef(false);
+  const flowVersionRef = useRef(0);
+  const weatherAbortRef = useRef<AbortController | null>(null);
+  const routeAbortRef = useRef<AbortController | null>(null);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
   const step1Completed = Boolean(selectedArea);
@@ -197,6 +200,11 @@ export default function HomePage() {
   }
 
   function resetFlow(): void {
+    flowVersionRef.current += 1;
+    weatherAbortRef.current?.abort();
+    routeAbortRef.current?.abort();
+    weatherAbortRef.current = null;
+    routeAbortRef.current = null;
     setQuery("");
     setResults([]);
     setPlaceLoading(false);
@@ -463,6 +471,11 @@ export default function HomePage() {
   }, [deferredStopQuery]);
 
   const loadWeatherForPlace = useCallback(async (place: GeocodeResult): Promise<void> => {
+    const flowVersion = flowVersionRef.current;
+    const controller = new AbortController();
+    weatherAbortRef.current?.abort();
+    weatherAbortRef.current = controller;
+
     setWeatherLoading(true);
     setError(null);
     setRouteError(null);
@@ -473,7 +486,10 @@ export default function HomePage() {
 
     try {
       const response = await fetch(
-        `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`
+        `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`,
+        {
+          signal: controller.signal
+        }
       );
       const payload = (await response.json()) as WeatherResponse & ApiError;
 
@@ -481,16 +497,34 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å hente værdata.");
       }
 
+      if (flowVersion !== flowVersionRef.current) {
+        return;
+      }
+
       setAnalysisRunMs(Date.now());
       setWeather(payload);
       setResults([]);
       setAddressResults([]);
     } catch (caughtError) {
+      if (caughtError instanceof Error && caughtError.name === "AbortError") {
+        return;
+      }
+
+      if (flowVersion !== flowVersionRef.current) {
+        return;
+      }
+
       setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
       setWeather(null);
       setAnalysisRunMs(null);
     } finally {
-      setWeatherLoading(false);
+      if (weatherAbortRef.current === controller) {
+        weatherAbortRef.current = null;
+      }
+
+      if (flowVersion === flowVersionRef.current) {
+        setWeatherLoading(false);
+      }
     }
   }, []);
 
@@ -500,13 +534,21 @@ export default function HomePage() {
       return;
     }
 
+    const flowVersion = flowVersionRef.current;
+    const controller = new AbortController();
+    routeAbortRef.current?.abort();
+    routeAbortRef.current = controller;
+
     setRouteLoading(true);
     setRouteError(null);
     setRouteAnalysis(null);
 
     try {
       const response = await fetch(
-        `/api/route-analysis?startLat=${selectedRouteStart.lat}&startLon=${selectedRouteStart.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selectedRouteStart.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`
+        `/api/route-analysis?startLat=${selectedRouteStart.lat}&startLon=${selectedRouteStart.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selectedRouteStart.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`,
+        {
+          signal: controller.signal
+        }
       );
       const payload = (await response.json()) as RouteTimeAnalysisResponse & ApiError;
 
@@ -514,14 +556,32 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å analysere ruten.");
       }
 
+      if (flowVersion !== flowVersionRef.current) {
+        return;
+      }
+
       setRouteAnalysis(payload);
     } catch (caughtError) {
+      if (caughtError instanceof Error && caughtError.name === "AbortError") {
+        return;
+      }
+
+      if (flowVersion !== flowVersionRef.current) {
+        return;
+      }
+
       setRouteError(
         caughtError instanceof Error ? caughtError.message : "Ukjent feil ved ruteanalyse."
       );
       setRouteAnalysis(null);
     } finally {
-      setRouteLoading(false);
+      if (routeAbortRef.current === controller) {
+        routeAbortRef.current = null;
+      }
+
+      if (flowVersion === flowVersionRef.current) {
+        setRouteLoading(false);
+      }
     }
   }, [selectedRouteStart, selectedStop]);
 
@@ -687,6 +747,13 @@ export default function HomePage() {
     }
     prevStep3Ref.current = step3Completed;
   }, [step3Completed]);
+
+  useEffect(() => {
+    return () => {
+      weatherAbortRef.current?.abort();
+      routeAbortRef.current?.abort();
+    };
+  }, []);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8">
