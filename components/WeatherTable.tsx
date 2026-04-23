@@ -123,15 +123,48 @@ function getWindGustWarning(windGust?: number): string | null {
   return null;
 }
 
+const HIGH_WIND_THRESHOLD = 10.8;
+const HIGH_PRECIPITATION_THRESHOLD = 2;
+const DANGEROUS_WIND_GUST_THRESHOLD = 17;
+
+function getRiskHighlight(hour: ScoredWeatherHour) {
+  const hasHighWind = hour.windSpeed >= HIGH_WIND_THRESHOLD;
+  const hasHighPrecipitation = hour.precipitationAmount >= HIGH_PRECIPITATION_THRESHOLD;
+  const hasDangerousWindGust =
+    hour.windGust !== undefined && hour.windGust >= DANGEROUS_WIND_GUST_THRESHOLD;
+
+  return {
+    hasHighWind,
+    hasHighPrecipitation,
+    hasDangerousWindGust
+  };
+}
+
 export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
   const showTailwindColumn = hours.some((hour) => hour.tailwindMs !== undefined);
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-100 sm:text-sm">
+        <p className="mb-2 font-medium text-slate-200">Forklaring:</p>
+        <ul className="flex flex-wrap gap-2">
+          <li className="rounded-md border border-orange-500/60 bg-orange-500/20 px-2 py-1">
+            Høy vind ({HIGH_WIND_THRESHOLD.toFixed(1)}+ m/s)
+          </li>
+          <li className="rounded-md border border-cyan-500/60 bg-cyan-500/20 px-2 py-1">
+            Høy nedbør ({HIGH_PRECIPITATION_THRESHOLD.toFixed(1)}+ mm)
+          </li>
+          <li className="rounded-md border border-rose-500/70 bg-rose-500/20 px-2 py-1">
+            Farlige vindkast ({DANGEROUS_WIND_GUST_THRESHOLD.toFixed(1)}+ m/s)
+          </li>
+        </ul>
+      </div>
+
       <div className="grid gap-3 lg:hidden">
         {hours.map((hour) => {
           const symbolEmoji = getSymbolEmoji(hour.symbolCode);
           const windGustWarning = getWindGustWarning(hour.windGust);
+          const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
 
           return (
             <article
@@ -146,17 +179,37 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <dl className="mt-3 space-y-2 text-slate-200">
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Vind</dt>
-                  <dd className="text-right font-medium">{hour.windSpeed.toFixed(1)} m/s</dd>
+                  <dd
+                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                      hasHighWind
+                        ? "border border-orange-500/60 bg-orange-500/20 text-orange-100"
+                        : ""
+                    }`}
+                  >
+                    {hour.windSpeed.toFixed(1)} m/s
+                  </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Nedbør</dt>
-                  <dd className="text-right font-medium">
+                  <dd
+                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                      hasHighPrecipitation
+                        ? "border border-cyan-500/60 bg-cyan-500/20 text-cyan-100"
+                        : ""
+                    }`}
+                  >
                     {hour.precipitationAmount.toFixed(1)} mm
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Vindkast</dt>
-                  <dd className="text-right font-medium">
+                  <dd
+                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                      hasDangerousWindGust
+                        ? "border border-rose-500/70 bg-rose-500/20 text-rose-100"
+                        : ""
+                    }`}
+                  >
                     {hour.windGust !== undefined ? `${hour.windGust.toFixed(1)} m/s` : "-"}
                   </dd>
                 </div>
@@ -229,12 +282,25 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
             {hours.map((hour) => {
               const symbolEmoji = getSymbolEmoji(hour.symbolCode);
               const windGustWarning = getWindGustWarning(hour.windGust);
+              const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
+              const hasAnyRisk = hasHighWind || hasHighPrecipitation || hasDangerousWindGust;
 
               return (
-                <tr key={hour.time} className="border-t border-slate-800">
+                <tr
+                  key={hour.time}
+                  className={`border-t border-slate-800 ${hasAnyRisk ? "bg-slate-800/40" : ""}`}
+                >
                   <td className="px-4 py-3 font-medium text-slate-200">{formatHour(hour.time)}</td>
                   <td className="px-4 py-3">{hour.airTemperature.toFixed(1)}°C</td>
-                  <td className="px-4 py-3">{hour.precipitationAmount.toFixed(1)} mm</td>
+                  <td
+                    className={`px-4 py-3 ${
+                      hasHighPrecipitation
+                        ? "font-semibold text-cyan-100 underline decoration-cyan-400/70 decoration-2 underline-offset-4"
+                        : ""
+                    }`}
+                  >
+                    {hour.precipitationAmount.toFixed(1)} mm
+                  </td>
                   <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                   <td className="px-4 py-3">
                     <div
@@ -245,8 +311,22 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                       {symbolEmoji}
                     </div>
                   </td>
-                  <td className="px-4 py-3">{hour.windSpeed.toFixed(1)} m/s</td>
-                  <td className="px-4 py-3">
+                  <td
+                    className={`px-4 py-3 ${
+                      hasHighWind
+                        ? "font-semibold text-orange-100 underline decoration-orange-400/80 decoration-2 underline-offset-4"
+                        : ""
+                    }`}
+                  >
+                    {hour.windSpeed.toFixed(1)} m/s
+                  </td>
+                  <td
+                    className={`px-4 py-3 ${
+                      hasDangerousWindGust
+                        ? "font-semibold text-rose-100 underline decoration-rose-400/80 decoration-2 underline-offset-4"
+                        : ""
+                    }`}
+                  >
                     {hour.windGust !== undefined ? (
                       <div>
                         <p>{hour.windGust.toFixed(1)} m/s</p>
