@@ -39,16 +39,16 @@ export function getWeatherConditionKey(
     return "fare";
   }
 
+  if (hour.windSpeed >= HIGH_WIND_THRESHOLD) {
+    return "vind";
+  }
+
   if (isRainSymbol(hour.symbolCode)) {
     return "regn";
   }
 
   if (hour.precipitationAmount > 0) {
     return "regn";
-  }
-
-  if (hour.windSpeed >= HIGH_WIND_THRESHOLD) {
-    return "vind";
   }
 
   return "sol";
