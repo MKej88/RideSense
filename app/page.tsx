@@ -1057,7 +1057,7 @@ export default function HomePage() {
       )}
 
       {activeTab === "routes" && (
-        <section className="space-y-4">
+        <section ref={routeSectionRef} className="space-y-4">
           <div
             ref={startSectionRef}
             className={`rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-sm ${
@@ -1199,10 +1199,7 @@ export default function HomePage() {
           )}
 
           {routeAnalysis && (
-            <section
-              ref={routeSectionRef}
-              className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700"
-            >
+            <section className="space-y-4 rounded-xl bg-slate-900 p-4 shadow-sm ring-1 ring-slate-700">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg bg-slate-800/60 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">
