@@ -190,7 +190,13 @@ export default function HomePage() {
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
   const step1Completed = Boolean(selectedArea);
   const step2Completed = Boolean(selectedRouteStart);
-  const step3Completed = Boolean(weather);
+  const step3Completed = Boolean(
+    weather &&
+      selectedRouteStart &&
+      selected &&
+      selected.lat === selectedRouteStart.lat &&
+      selected.lon === selectedRouteStart.lon
+  );
   const step4Completed = Boolean(routeAnalysis);
 
   function scrollToSection(ref: { current: HTMLElement | HTMLDivElement | null }): void {
@@ -497,7 +503,7 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å hente værdata.");
       }
 
-      if (flowVersion !== flowVersionRef.current) {
+      if (flowVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
         return;
       }
 
@@ -510,7 +516,7 @@ export default function HomePage() {
         return;
       }
 
-      if (flowVersion !== flowVersionRef.current) {
+      if (flowVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
         return;
       }
 
@@ -520,9 +526,6 @@ export default function HomePage() {
     } finally {
       if (weatherAbortRef.current === controller) {
         weatherAbortRef.current = null;
-      }
-
-      if (flowVersion === flowVersionRef.current) {
         setWeatherLoading(false);
       }
     }
@@ -556,7 +559,7 @@ export default function HomePage() {
         throw new Error(payload.error || "Klarte ikke å analysere ruten.");
       }
 
-      if (flowVersion !== flowVersionRef.current) {
+      if (flowVersion !== flowVersionRef.current || routeAbortRef.current !== controller) {
         return;
       }
 
@@ -566,7 +569,7 @@ export default function HomePage() {
         return;
       }
 
-      if (flowVersion !== flowVersionRef.current) {
+      if (flowVersion !== flowVersionRef.current || routeAbortRef.current !== controller) {
         return;
       }
 
@@ -577,9 +580,6 @@ export default function HomePage() {
     } finally {
       if (routeAbortRef.current === controller) {
         routeAbortRef.current = null;
-      }
-
-      if (flowVersion === flowVersionRef.current) {
         setRouteLoading(false);
       }
     }
