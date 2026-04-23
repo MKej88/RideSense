@@ -1,4 +1,5 @@
 import { ScoreBadge } from "@/components/ScoreBadge";
+import { getScoreLabel } from "@/lib/scoring";
 import { BestWindow, ScoreLabel } from "@/lib/types";
 
 const TIME_RANGE_SEPARATOR = " - ";
@@ -57,15 +58,7 @@ function formatBestWindowLabel(startTime: string, endTime: string, includeDay: b
 }
 
 function scoreLabelFromAverage(score: number): ScoreLabel {
-  if (score >= 80) {
-    return "good";
-  }
-
-  if (score >= 55) {
-    return "ok";
-  }
-
-  return "bad";
+  return getScoreLabel(score);
 }
 
 interface BestWindowCardProps {
