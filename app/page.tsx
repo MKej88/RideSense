@@ -211,6 +211,19 @@ export default function HomePage() {
     }, 120);
   }
 
+  function activateTabAndScroll(
+    tab: "forecast" | "routes",
+    ref: { current: HTMLElement | HTMLDivElement | null }
+  ): void {
+    if (activeTab === tab) {
+      scrollToSection(ref);
+      return;
+    }
+
+    setActiveTab(tab);
+    scrollToSection(ref);
+  }
+
   function resetFlow(): void {
     flowVersionRef.current += 1;
     placeAbortRef.current?.abort();
@@ -1069,21 +1082,21 @@ export default function HomePage() {
             <button
               type="button"
               className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => scrollToSection(locationSectionRef)}
+              onClick={() => activateTabAndScroll("forecast", locationSectionRef)}
             >
               Til stedvalg
             </button>
             <button
               type="button"
               className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => scrollToSection(weatherSectionRef)}
+              onClick={() => activateTabAndScroll("forecast", weatherSectionRef)}
             >
               Til vær
             </button>
             <button
               type="button"
               className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => scrollToSection(routeSectionRef)}
+              onClick={() => activateTabAndScroll("routes", routeSectionRef)}
             >
               Til ruteanalyse
             </button>
@@ -1091,7 +1104,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-                onClick={() => scrollToSection(mapSectionRef)}
+                onClick={() => activateTabAndScroll("routes", mapSectionRef)}
               >
                 Til kart
               </button>
