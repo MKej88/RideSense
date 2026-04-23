@@ -4,7 +4,7 @@ import { WeatherConditionBadge } from "@/components/WeatherConditionBadge";
 import { WeatherLegend } from "@/components/WeatherLegend";
 import { RouteAnalysisResponse } from "@/lib/types";
 import { formatOsloDateTime, formatOsloTime, isOlderThanMinutes } from "@/lib/time-format";
-import { getWeatherConditionVisual } from "@/lib/weather-condition";
+import { WeatherConditionKey, getWeatherConditionVisual } from "@/lib/weather-condition";
 
 interface RouteAnalysisPanelProps {
   data: RouteAnalysisResponse | null;
@@ -14,6 +14,13 @@ interface RouteAnalysisPanelProps {
   onSelectRoute: (routeId: string) => void;
   onRefresh: () => void;
 }
+
+const ROUTE_BADGE_SEVERITY: Record<WeatherConditionKey, number> = {
+  sol: 0,
+  vind: 1,
+  regn: 2,
+  fare: 3
+};
 
 export function RouteAnalysisPanel({
   data,
@@ -89,14 +96,19 @@ export function RouteAnalysisPanel({
           <div className="grid gap-3 lg:grid-cols-3">
             {data.routes.map((routeAnalysis) => {
               const selected = routeAnalysis.route.id === selectedRouteId;
-              const categoryVisual =
-                routeAnalysis.sampledPoints.length > 0
-                  ? getWeatherConditionVisual(routeAnalysis.sampledPoints[0].weather)
-                  : getWeatherConditionVisual({
-                      symbolCode: undefined,
-                      windSpeed: routeAnalysis.summary.averageWindSpeed,
-                      windGust: undefined
-                    });
+              const categoryVisual = routeAnalysis.sampledPoints.reduce(
+                (currentWorst, sampledPoint) => {
+                  const nextVisual = getWeatherConditionVisual(sampledPoint.weather);
+                  return ROUTE_BADGE_SEVERITY[nextVisual.key] > ROUTE_BADGE_SEVERITY[currentWorst.key]
+                    ? nextVisual
+                    : currentWorst;
+                },
+                getWeatherConditionVisual({
+                  symbolCode: undefined,
+                  windSpeed: routeAnalysis.summary.averageWindSpeed,
+                  windGust: undefined
+                })
+              );
 
               return (
                 <button
