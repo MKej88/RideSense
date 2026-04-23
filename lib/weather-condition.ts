@@ -28,7 +28,9 @@ function isDangerSymbol(symbolCode?: string): boolean {
   return symbol.includes("thunder") || symbol.includes("sleet") || symbol.includes("snow");
 }
 
-export function getWeatherConditionKey(hour: Pick<ScoredWeatherHour, "symbolCode" | "windSpeed" | "windGust">): WeatherConditionKey {
+export function getWeatherConditionKey(
+  hour: Pick<ScoredWeatherHour, "symbolCode" | "windSpeed" | "windGust" | "precipitationAmount">
+): WeatherConditionKey {
   if (isDangerSymbol(hour.symbolCode)) {
     return "fare";
   }
@@ -41,6 +43,10 @@ export function getWeatherConditionKey(hour: Pick<ScoredWeatherHour, "symbolCode
     return "regn";
   }
 
+  if (hour.precipitationAmount > 0) {
+    return "regn";
+  }
+
   if (hour.windSpeed >= HIGH_WIND_THRESHOLD) {
     return "vind";
   }
@@ -49,7 +55,7 @@ export function getWeatherConditionKey(hour: Pick<ScoredWeatherHour, "symbolCode
 }
 
 export function getWeatherConditionVisual(
-  hour: Pick<ScoredWeatherHour, "symbolCode" | "windSpeed" | "windGust">
+  hour: Pick<ScoredWeatherHour, "symbolCode" | "windSpeed" | "windGust" | "precipitationAmount">
 ): WeatherConditionVisual {
   return WEATHER_CONDITION_VISUALS[getWeatherConditionKey(hour)];
 }

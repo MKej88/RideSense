@@ -25,7 +25,8 @@ const ROUTE_BADGE_SEVERITY: Record<WeatherConditionKey, number> = {
 const DEFAULT_ROUTE_BADGE_VISUAL = getWeatherConditionVisual({
   symbolCode: undefined,
   windSpeed: 0,
-  windGust: undefined
+  windGust: undefined,
+  precipitationAmount: 0
 });
 
 export function RouteAnalysisPanel({
