@@ -12,6 +12,10 @@ body {
     @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-sm;
   }
 
+  .rs-section-shell {
+    @apply rounded-2xl border border-slate-700/80 bg-slate-900/35 p-1.5 md:p-2;
+  }
+
   .rs-surface-subtle {
     @apply rounded-lg border border-slate-700/80 bg-slate-800/50;
   }
