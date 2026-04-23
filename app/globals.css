@@ -3,8 +3,38 @@
 @tailwind utilities;
 
 body {
-  background: #020617;
+  background: linear-gradient(180deg, #020617 0%, #020b1b 52%, #01040d 100%);
   color: #e2e8f0;
+}
+
+@layer components {
+  .rs-surface {
+    @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-sm;
+  }
+
+  .rs-surface-subtle {
+    @apply rounded-lg border border-slate-700/80 bg-slate-800/50;
+  }
+
+  .rs-surface-strong {
+    @apply rounded-xl border border-slate-600 bg-slate-950/90 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.85)];
+  }
+
+  .rs-card-layout {
+    @apply flex flex-col gap-3;
+  }
+
+  .rs-card-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-slate-400;
+  }
+
+  .rs-card-metric {
+    @apply text-lg font-semibold text-slate-100;
+  }
+
+  .rs-card-action {
+    @apply rounded-md border border-slate-500 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700;
+  }
 }
 
 .ridesense-map-pin {
