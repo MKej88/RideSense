@@ -95,6 +95,21 @@ function getNextHourTimestamp(nowMs: number): number {
   return Math.floor(nowMs / ONE_HOUR_MS) * ONE_HOUR_MS + ONE_HOUR_MS;
 }
 
+function getCurrentOrNextHour<T extends { time: string }>(hours: T[], referenceMs: number): T | null {
+  if (hours.length === 0) {
+    return null;
+  }
+
+  const nextHourTs = getNextHourTimestamp(referenceMs);
+  const nextHour = hours.find((hour) => new Date(hour.time).getTime() >= nextHourTs);
+
+  if (nextHour) {
+    return nextHour;
+  }
+
+  return hours[hours.length - 1] || null;
+}
+
 function buildBestWindowFromHours(
   hours: WeatherResponse["hours"],
   analysisRunMs: number
@@ -849,26 +864,15 @@ export default function HomePage() {
 
   const compactScoreHour = useMemo(() => {
     if (routeAnalysis?.hours.length) {
-      return routeAnalysis.hours[0];
+      return getCurrentOrNextHour(routeAnalysis.hours, staleCheckTick);
     }
 
     if (!weather || analysisRunMs === null) {
       return null;
     }
 
-    const nextHourTs = getNextHourTimestamp(analysisRunMs);
-    const nextHour = weather.hours.find((hour) => new Date(hour.time).getTime() >= nextHourTs);
-
-    if (nextHour) {
-      return nextHour;
-    }
-
-    if (weather.hours.length) {
-      return weather.hours[0];
-    }
-
-    return null;
-  }, [analysisRunMs, routeAnalysis, weather]);
+    return getCurrentOrNextHour(weather.hours, analysisRunMs);
+  }, [analysisRunMs, routeAnalysis, staleCheckTick, weather]);
 
   const compactSelectionLabel = useMemo(() => {
     if (routeAnalysis) {
