@@ -184,9 +184,28 @@ export default function HomePage() {
   const stopAbortRef = useRef<AbortController | null>(null);
   const weatherAbortRef = useRef<AbortController | null>(null);
   const routeAbortRef = useRef<AbortController | null>(null);
+  const onboardingDismissedFallbackRef = useRef(false);
+
+  function readOnboardingDismissed(): boolean {
+    try {
+      return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
+    } catch {
+      return onboardingDismissedFallbackRef.current;
+    }
+  }
+
+  function persistOnboardingDismissed(): void {
+    onboardingDismissedFallbackRef.current = true;
+
+    try {
+      window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
+    } catch {
+      // Ignore storage failures (for example blocked Web Storage).
+    }
+  }
 
   useEffect(() => {
-    const onboardingDismissed = window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
+    const onboardingDismissed = readOnboardingDismissed();
 
     if (onboardingDismissed) {
       setShowOnboarding(false);
@@ -275,7 +294,7 @@ export default function HomePage() {
     setResults([]);
     if (showOnboarding) {
       setShowOnboarding(false);
-      window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
+      persistOnboardingDismissed();
     }
   }
 
