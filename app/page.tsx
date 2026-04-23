@@ -36,6 +36,7 @@ const WeatherTable = dynamic(
 
 const PLACE_SEARCH_DEBOUNCE_MS = 180;
 const ADDRESS_SEARCH_DEBOUNCE_MS = 180;
+const ONBOARDING_DISMISSED_KEY = "ridesense.onboarding.dismissed";
 const QUICK_CITIES: GeocodeResult[] = [
   { name: "Oslo", lat: 59.9139, lon: 10.7522 },
   { name: "Bærum", lat: 59.8939, lon: 10.523 },
@@ -143,6 +144,7 @@ export default function HomePage() {
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(true);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
   const [selectedArea, setSelectedArea] = useState<GeocodeResult | null>(null);
@@ -182,6 +184,33 @@ export default function HomePage() {
   const stopAbortRef = useRef<AbortController | null>(null);
   const weatherAbortRef = useRef<AbortController | null>(null);
   const routeAbortRef = useRef<AbortController | null>(null);
+  const onboardingDismissedFallbackRef = useRef(false);
+
+  function readOnboardingDismissed(): boolean {
+    try {
+      return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
+    } catch {
+      return onboardingDismissedFallbackRef.current;
+    }
+  }
+
+  function persistOnboardingDismissed(): void {
+    onboardingDismissedFallbackRef.current = true;
+
+    try {
+      window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
+    } catch {
+      // Ignore storage failures (for example blocked Web Storage).
+    }
+  }
+
+  useEffect(() => {
+    const onboardingDismissed = readOnboardingDismissed();
+
+    if (onboardingDismissed) {
+      setShowOnboarding(false);
+    }
+  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -192,6 +221,7 @@ export default function HomePage() {
   }, []);
 
   const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
+  const osloQuickCity = QUICK_CITIES.find((city) => city.name === "Oslo");
   const step1Completed = Boolean(selectedArea);
   const step2Completed = Boolean(selectedRouteStart);
   const step3Completed = Boolean(
@@ -262,6 +292,10 @@ export default function HomePage() {
     setRouteError(null);
     setAnalysisRunMs(null);
     setResults([]);
+    if (showOnboarding) {
+      setShowOnboarding(false);
+      persistOnboardingDismissed();
+    }
   }
 
   useEffect(() => {
@@ -999,6 +1033,23 @@ export default function HomePage() {
       {activeTab === "forecast" && (
       <section className="rs-surface p-6">
         <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
+        </p>
+
+        {showOnboarding && !selectedArea && (
+          <div className="mt-4 grid gap-2 rounded-xl border border-cyan-300/30 bg-slate-900/60 p-3 text-sm text-cyan-100 md:grid-cols-3">
+            <p className="rounded-md bg-slate-800/70 p-2">
+              📍 <strong>1.</strong> Velg område.
+            </p>
+            <p className="rounded-md bg-slate-800/70 p-2">
+              🌤️ <strong>2.</strong> Se værscore time for time.
+            </p>
+            <p className="rounded-md bg-slate-800/70 p-2">
+              🚴 <strong>3.</strong> Finn beste tidspunkt.
+            </p>
+          </div>
+        )}
 
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
           <input
@@ -1029,6 +1080,19 @@ export default function HomePage() {
             Søk
           </button>
         </form>
+        {osloQuickCity && (
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-60"
+            onClick={() => {
+              chooseArea(osloQuickCity);
+              void loadWeatherForPlace(osloQuickCity, { focusForecastSection: true });
+            }}
+            disabled={weatherLoading || addressLoading || placeLoading}
+          >
+            Prøv med Oslo
+          </button>
+        )}
         <div className="mt-4">
           <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
           <div className="grid grid-cols-5 gap-2">
