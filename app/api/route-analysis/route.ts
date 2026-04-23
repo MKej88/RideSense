@@ -10,6 +10,14 @@ function parseCoordinate(value: string | null): number {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+function isValidLatitude(value: number): boolean {
+  return value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value: number): boolean {
+  return value >= -180 && value <= 180;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const startLat = parseCoordinate(request.nextUrl.searchParams.get("startLat"));
   const startLon = parseCoordinate(request.nextUrl.searchParams.get("startLon"));
@@ -26,6 +34,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   ) {
     return NextResponse.json(
       { error: "Ugyldig start- eller stopp-posisjon for ruteanalyse." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !isValidLatitude(startLat) ||
+    !isValidLongitude(startLon) ||
+    !isValidLatitude(stopLat) ||
+    !isValidLongitude(stopLon)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Koordinater må være innenfor gyldige grenser (lat: -90 til 90, lon: -180 til 180)."
+      },
       { status: 400 }
     );
   }

@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+import sys
+from typing import Any
+
+
+def _load_weather_symbols_module() -> Any:
+    module_path = Path(__file__).resolve().parent.parent / "scripts" / "download_weather_symbols.py"
+    spec = importlib.util.spec_from_file_location("download_weather_symbols", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load module spec for {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+weather_symbols = _load_weather_symbols_module()
+
+
+class _FakeResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._payload
+
+
+def test_download_symbol_saves_file_on_success(monkeypatch: Any, tmp_path: Path) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert (tmp_path / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
+
+
+def test_download_symbol_returns_false_on_network_error(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        raise weather_symbols.URLError("nettverksfeil")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is False
+    assert not (tmp_path / "clearsky_day.svg").exists()

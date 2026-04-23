@@ -63,16 +63,17 @@ Det påvirker både score og en enkel tillitsindikator (high/medium/low).
 - Markøren kan flyttes.
 - Når markøren flyttes, oppdateres værdata og score automatisk for ny posisjon.
 
-### 6) Ruteanalyse (1–3 ruter)
+### 6) Ruteanalyse (valgt start og stopp)
 
-Du kan analysere ruter fra valgt startpunkt ved å sette **min km** og **maks km**:
+Du kan analysere en valgt rute ved å sette **startadresse** og **stoppadresse**:
 
-- appen bygger opptil 3 tur/retur-ruter innen valgt avstand
-- ruter bygges fra veidata (Overpass/OSRM)
-- hver rute samples i flere punkter
+- appen forsøker å hente veigeometri mellom punktene (OSRM)
+- hvis returrute finnes, analyseres tur/retur
+- hvis returrute ikke finnes, analyseres enveisrute
+- ruten samples i flere punkter
 - vær hentes for punktene
-- hver rute får samlet rutescore
-- appen peker ut beste rute nå og forklarer kort hvorfor
+- ruten får samlet rutescore per tidspunkt
+- appen viser beste sykkelvindu for ruten (neste 24 timer og neste 7 døgn)
 
 ## Teknisk oversikt
 
@@ -83,9 +84,9 @@ Du kan analysere ruter fra valgt startpunkt ved å sette **min km** og **maks km
 
 ## API-endepunkter
 
-- `GET /api/geocode` – sted/adressesøk
+- `GET /api/geocode` – steds- og adressesøk
 - `GET /api/weather` – værdata + score for punkt
-- `GET /api/route-analysis` – ruteanalyse for valgt punkt og km-intervall
+- `GET /api/route-analysis` – ruteanalyse for valgt start- og stoppunkt
 - `GET /api/weather-symbol` – servering av værikoner
 
 ## Miljøvariabler
@@ -118,9 +119,11 @@ npm run lint
 npm run typecheck
 npm run build
 npm run download:weather-symbols
+pytest
 ```
 
 > Merk: `download:weather-symbols` kjører et Python-skript som laster ned værikoner.
+> Merk: `pytest` kjører Python-tester (for tiden enkle tester av nedlastingsskriptet).
 
 ## Prosjektstruktur (kort)
 
