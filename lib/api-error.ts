@@ -39,13 +39,22 @@ export function mapUnexpectedApiError(
 ): ApiErrorDetails {
   const message = error instanceof Error ? error.message : "Ukjent feil";
   const normalizedMessage = message.toLowerCase();
+  const hasProviderName =
+    normalizedMessage.includes("met api") ||
+    normalizedMessage.includes("overpass") ||
+    normalizedMessage.includes("geonorge") ||
+    normalizedMessage.includes("nominatim") ||
+    normalizedMessage.includes("open-meteo") ||
+    normalizedMessage.includes("værtjenesten") ||
+    normalizedMessage.includes("karttjenesten");
   const isExternalServiceError =
     normalizedMessage === "fetch failed" ||
     /svarte med\s\d{3}/i.test(message) ||
     normalizedMessage.includes("svarte ikke raskt nok") ||
     normalizedMessage.includes("timed out") ||
     normalizedMessage.includes("timeout") ||
-    normalizedMessage.includes("etimedout");
+    normalizedMessage.includes("etimedout") ||
+    (normalizedMessage.includes("kunne ikke hente") && hasProviderName);
 
   if (isExternalServiceError) {
     return {
