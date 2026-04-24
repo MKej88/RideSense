@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createApiError, mapUnexpectedApiError } from "@/lib/api-error";
 import { analyzeUserRoute } from "@/lib/route-analysis";
 
+function isRouteAnalysisNoDataError(message: string): boolean {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes("fant ingen egnede veiruter") ||
+    normalizedMessage.includes("fant ikke nok værdata")
+  );
+}
+
 function parseCoordinate(value: string | null): number {
   if (value === null || value.trim() === "") {
     return NaN;
@@ -73,6 +82,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
   } catch (error) {
+    if (error instanceof Error && isRouteAnalysisNoDataError(error.message)) {
+      return NextResponse.json(
+        createApiError(
+          "MANGLENDE_DATA",
+          error.message,
+          "Juster start/stopp eller prøv igjen litt senere når mer data er tilgjengelig."
+        ),
+        { status: 422 }
+      );
+    }
+
     const mappedError = mapUnexpectedApiError(error, {
       externalAdvice: "Prøv igjen om litt. Kart- eller værtjenesten kan være midlertidig nede."
     });
