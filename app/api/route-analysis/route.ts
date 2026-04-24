@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createApiError, mapUnexpectedApiError } from "@/lib/api-error";
 import { analyzeUserRoute } from "@/lib/route-analysis";
 
 function parseCoordinate(value: string | null): number {
@@ -33,7 +34,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     !Number.isFinite(stopLon)
   ) {
     return NextResponse.json(
-      { error: "Ugyldig start- eller stopp-posisjon for ruteanalyse." },
+      createApiError(
+        "UGYLDIG_INPUT",
+        "Ugyldig start- eller stopp-posisjon for ruteanalyse.",
+        "Velg start og stopp på nytt fra søkelisten."
+      ),
       { status: 400 }
     );
   }
@@ -45,10 +50,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     !isValidLongitude(stopLon)
   ) {
     return NextResponse.json(
-      {
-        error:
-          "Koordinater må være innenfor gyldige grenser (lat: -90 til 90, lon: -180 til 180)."
-      },
+      createApiError(
+        "UGYLDIG_INPUT",
+        "Koordinater må være innenfor gyldige grenser.",
+        "Kontroller at lat/lon er gyldige og prøv igjen."
+      ),
       { status: 400 }
     );
   }
@@ -67,13 +73,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message === "fetch failed"
-          ? "En ekstern karttjeneste svarte ikke. Prøv igjen."
-          : error.message
-        : "Noe gikk galt ved analyse av ruten.";
+    const mappedError = mapUnexpectedApiError(error, {
+      externalAdvice: "Prøv igjen om litt. Kart- eller værtjenesten kan være midlertidig nede."
+    });
 
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json(
+      createApiError(mappedError.code, mappedError.message, mappedError.advice),
+      { status: 502 }
+    );
   }
 }

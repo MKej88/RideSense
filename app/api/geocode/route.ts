@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createApiError, mapUnexpectedApiError } from "@/lib/api-error";
 import { GeocodeResult } from "@/lib/types";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
@@ -477,7 +478,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (!query || query.length < 2) {
     return NextResponse.json(
-      { error: "Skriv inn minst 2 tegn for å søke sted." },
+      createApiError(
+        "UGYLDIG_INPUT",
+        "Skriv inn minst 2 tegn for å søke sted.",
+        "Legg til flere bokstaver i søket."
+      ),
       { status: 400 }
     );
   }
@@ -521,7 +526,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       }
     );
-  } catch {
+  } catch (primaryError) {
     try {
       if (context) {
         throw new Error("Nominatim feilet");
@@ -536,12 +541,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           }
         }
       );
-    } catch {
+    } catch (fallbackError) {
+      const mappedError = mapUnexpectedApiError(fallbackError, {
+        externalAdvice:
+          "Vent litt og prøv søket igjen. Du kan også prøve et mer spesifikt stedsnavn."
+      });
+      const finalError =
+        context && mappedError.code === "INTERN_FEIL"
+          ? mapUnexpectedApiError(primaryError, {
+              externalAdvice:
+                "Vent litt og prøv søket igjen. Du kan også prøve et mer spesifikt stedsnavn."
+            })
+          : mappedError;
+
       return NextResponse.json(
-        {
-          error:
-            "Kunne ikke hente stedsdata akkurat nå. Prøv igjen om litt."
-        },
+        createApiError(finalError.code, finalError.message, finalError.advice),
         { status: 502 }
       );
     }

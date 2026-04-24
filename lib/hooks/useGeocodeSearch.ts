@@ -1,9 +1,6 @@
 import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { getErrorMessageForUi } from "@/lib/api-error";
 import { GeocodeResult } from "@/lib/types";
-
-interface ApiError {
-  error: string;
-}
 
 interface UseGeocodeSearchParams {
   activeTab: "forecast" | "routes";
@@ -107,10 +104,10 @@ export function useGeocodeSearch({
         const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
           signal: controller.signal
         });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
+        const payload = (await response.json()) as { results?: GeocodeResult[] };
 
         if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke sted.");
+          throw new Error(getErrorMessageForUi(payload, "Klarte ikke å søke sted."));
         }
 
         if (!active || scopedVersion !== flowVersionRef.current || placeAbortRef.current !== controller) {
@@ -191,10 +188,10 @@ export function useGeocodeSearch({
           ? `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(areaContext)}&nearLat=${scopedArea.lat}&nearLon=${scopedArea.lon}`
           : `/api/geocode?q=${encodeURIComponent(trimmedQuery)}`;
         const response = await fetch(url, { signal: controller.signal });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
+        const payload = (await response.json()) as { results?: GeocodeResult[] };
 
         if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke adresse.");
+          throw new Error(getErrorMessageForUi(payload, "Klarte ikke å søke adresse."));
         }
 
         if (!active || scopedVersion !== flowVersionRef.current || addressAbortRef.current !== controller) {
@@ -270,10 +267,10 @@ export function useGeocodeSearch({
         const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
           signal: controller.signal
         });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
+        const payload = (await response.json()) as { results?: GeocodeResult[] };
 
         if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke stoppadresse.");
+          throw new Error(getErrorMessageForUi(payload, "Klarte ikke å søke stoppadresse."));
         }
 
         if (!active || scopedVersion !== flowVersionRef.current || stopAbortRef.current !== controller) {

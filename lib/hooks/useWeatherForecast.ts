@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessageForUi } from "@/lib/api-error";
 import { GeocodeResult, WeatherResponse } from "@/lib/types";
-
-interface ApiError {
-  error: string;
-}
 
 export function useWeatherForecast(flowVersion: number) {
   const [selected, setSelected] = useState<GeocodeResult | null>(null);
@@ -36,10 +33,10 @@ export function useWeatherForecast(flowVersion: number) {
         `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`,
         { signal: controller.signal }
       );
-      const payload = (await response.json()) as WeatherResponse & ApiError;
+      const payload = (await response.json()) as WeatherResponse;
 
       if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å hente værdata.");
+        throw new Error(getErrorMessageForUi(payload, "Klarte ikke å hente værdata."));
       }
 
       if (scopedVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
