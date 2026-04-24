@@ -81,3 +81,37 @@ def test_download_symbol_returns_false_on_empty_response(
 
     assert result is False
     assert not (tmp_path / "clearsky_day.svg").exists()
+
+
+def test_download_symbol_creates_output_directory(monkeypatch: Any, tmp_path: Path) -> None:
+    nested_output_dir = tmp_path / "missing" / "weather-symbols"
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", nested_output_dir)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert (nested_output_dir / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
+
+
+def test_download_symbol_returns_false_on_directory_creation_error(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    occupied_path = tmp_path / "occupied"
+    occupied_path.write_text("not a directory")
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", occupied_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is False
+    assert not (occupied_path / "clearsky_day.svg").exists()
