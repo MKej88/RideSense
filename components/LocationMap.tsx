@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { RoutePoint } from "@/lib/types";
-
 interface LocationMapProps {
   lat: number;
   lon: number;
   label: string;
   onMarkerMoved: (lat: number, lon: number) => void;
-  routeName?: string | null;
-  routePoints?: RoutePoint[];
 }
 
 type LeafletMap = {
@@ -118,9 +114,7 @@ export function LocationMap({
   lat,
   lon,
   label,
-  onMarkerMoved,
-  routeName,
-  routePoints = []
+  onMarkerMoved
 }: LocationMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -194,38 +188,18 @@ export function LocationMap({
       return;
     }
 
-    const routeLatLngs = routePoints.map((point) => [point.lat, point.lon] as [number, number]);
-
-    if (window.L && routeLatLngs.length >= 2) {
-      if (!routeRef.current) {
-        routeRef.current = window.L.polyline(routeLatLngs, {
-          color: "#f97316",
-          weight: 6,
-          opacity: 0.85
-        });
-        routeRef.current.addTo(mapRef.current);
-      } else {
-        routeRef.current.setLatLngs(routeLatLngs);
-      }
-
-      routeRef.current.bindPopup(routeName || "Valgt rute");
-      mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [36, 36] });
-    } else {
-      routeRef.current?.remove();
-      routeRef.current = null;
-      mapRef.current.setView([lat, lon], 12);
-    }
-
+    routeRef.current?.remove();
+    routeRef.current = null;
+    mapRef.current.setView([lat, lon], 12);
     markerRef.current.setLatLng([lat, lon]);
     markerRef.current.bindPopup(label).openPopup();
-  }, [lat, lon, label, routeName, routePoints]);
+  }, [lat, lon, label]);
 
   return (
     <section className="rounded-xl bg-slate-900 p-4 shadow-sm">
       <h3 className="text-base font-semibold text-slate-100">Kart</h3>
       <p className="mt-1 text-sm text-slate-400">
-        Dra markøren for å oppdatere startplass og vær. Når du velger en rute, vises den som en
-        tydelig orange linje og kartet sentreres på ruten. Kartbakgrunnen er fra OpenStreetMap.
+        Dra markøren for å oppdatere valgt sted og hente ny værprognose. Kartbakgrunnen er fra OpenStreetMap.
       </p>
       <div ref={mapContainerRef} className="mt-3 h-72 w-full overflow-hidden rounded-lg md:h-96" />
     </section>
