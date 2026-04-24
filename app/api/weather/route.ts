@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createApiError, mapUnexpectedApiError } from "@/lib/api-error";
 import { fetchForecastForLocation } from "@/lib/weather";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const lat = Number(request.nextUrl.searchParams.get("lat"));
   const lon = Number(request.nextUrl.searchParams.get("lon"));
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const weather = await fetchForecastForLocation(lat, lon, label);
     return NextResponse.json(weather, {
       headers: {
-        "Cache-Control": "s-maxage=600, stale-while-revalidate=300"
+        "Cache-Control": "no-store, max-age=0"
       }
     });
   } catch (error) {

@@ -107,7 +107,7 @@ export async function fetchForecastForLocation(
       headers: {
         "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
       },
-      next: { revalidate: 600 },
+      cache: "no-store",
       signal: AbortSignal.timeout(MET_FETCH_TIMEOUT_MS)
     });
   } catch {
