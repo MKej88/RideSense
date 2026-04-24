@@ -95,7 +95,10 @@ SYMBOL_CODES = [
 
 def download_symbol(symbol_code: str) -> bool:
     target_path = OUTPUT_DIR / f"{symbol_code}.svg"
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
 
     request = Request(
         BASE_URL.format(code=symbol_code),
