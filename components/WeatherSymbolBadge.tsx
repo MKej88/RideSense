@@ -1,11 +1,7 @@
-import Image from "next/image";
-
 interface WeatherSymbolBadgeProps {
   symbolCode?: string;
   compact?: boolean;
 }
-
-const YR_SYMBOL_BASE_URL = "https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg";
 
 function normalizeSymbolCode(symbolCode?: string): string {
   const value = symbolCode?.trim().toLowerCase();
@@ -34,13 +30,13 @@ export function WeatherSymbolBadge({ symbolCode, compact = false }: WeatherSymbo
       aria-label={`Vær: ${label}`}
       title={`Vær: ${label}`}
     >
-      <Image
-        src={`${YR_SYMBOL_BASE_URL}/${encodeURIComponent(normalized)}.svg`}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/weather-symbol?code=${encodeURIComponent(normalized)}`}
         alt=""
         width={compact ? 16 : 20}
         height={compact ? 16 : 20}
         className="h-4 w-4 object-contain"
-        unoptimized
       />
       <span>{label}</span>
     </span>
