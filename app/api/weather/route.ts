@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createApiError, mapUnexpectedApiError } from "@/lib/api-error";
 import { fetchForecastForLocation } from "@/lib/weather";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -8,7 +9,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return NextResponse.json(
-      { error: "Ugyldig posisjon. Prøv søk på nytt." },
+      createApiError(
+        "UGYLDIG_INPUT",
+        "Ugyldig posisjon i forespørselen.",
+        "Søk opp stedet på nytt og prøv igjen."
+      ),
       { status: 400 }
     );
   }
@@ -21,13 +26,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
   } catch (error) {
+    const mappedError = mapUnexpectedApiError(error, {
+      externalAdvice: "Vent litt og prøv å hente værdata på nytt."
+    });
+
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Noe gikk galt ved henting av værdata."
-      },
+      createApiError(mappedError.code, mappedError.message, mappedError.advice),
       { status: 502 }
     );
   }

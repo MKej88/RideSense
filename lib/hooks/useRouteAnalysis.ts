@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessageForUi } from "@/lib/api-error";
 import { GeocodeResult, RouteTimeAnalysisResponse } from "@/lib/types";
-
-interface ApiError {
-  error: string;
-}
 
 export function useRouteAnalysis(flowVersion: number) {
   const [routeAnalysis, setRouteAnalysis] = useState<RouteTimeAnalysisResponse | null>(null);
@@ -40,10 +37,10 @@ export function useRouteAnalysis(flowVersion: number) {
         `/api/route-analysis?startLat=${selectedRouteStart.lat}&startLon=${selectedRouteStart.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selectedRouteStart.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`,
         { signal: controller.signal }
       );
-      const payload = (await response.json()) as RouteTimeAnalysisResponse & ApiError;
+      const payload = (await response.json()) as RouteTimeAnalysisResponse;
 
       if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å analysere ruten.");
+        throw new Error(getErrorMessageForUi(payload, "Klarte ikke å analysere ruten."));
       }
 
       if (scopedVersion !== flowVersionRef.current || routeAbortRef.current !== controller) {
