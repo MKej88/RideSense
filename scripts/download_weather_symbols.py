@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 BASE_URL = (
-    "https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg/{code}.svg"
+    "https://raw.githubusercontent.com/metno/weathericons/main/weather/svg/{code}.svg"
 )
 USER_AGENT = "RideSense/1.0 ridesense@example.com"
 OUTPUT_DIR = Path("public/weather-symbols")
