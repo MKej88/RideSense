@@ -187,17 +187,30 @@ export default function HomePage() {
     setSelectedRouteStart,
     searchError,
     setSearchError,
-    setResults
+    setResults,
+    resetGeocodeState
   } = geocode;
-  const { selected, setSelected, weather, setWeather, weatherLoading, error, setError, analysisRunMs } =
-    weatherForecast;
+  const {
+    selected,
+    setSelected,
+    weather,
+    setWeather,
+    weatherLoading,
+    error,
+    setError,
+    analysisRunMs,
+    loadWeather,
+    setAnalysisRunMs,
+    resetWeatherState
+  } = weatherForecast;
   const {
     routeAnalysis,
     setRouteAnalysis,
     routeLoading,
     routeError,
     setRouteError,
-    analyzeRoutes
+    analyzeRoutes,
+    resetRouteAnalysisState
   } = routeAnalysisState;
 
   function readOnboardingDismissed(): boolean {
@@ -267,9 +280,9 @@ export default function HomePage() {
 
   function resetFlow(): void {
     setFlowVersion((previous) => previous + 1);
-    geocode.resetGeocodeState();
-    weatherForecast.resetWeatherState();
-    routeAnalysisState.resetRouteAnalysisState();
+    resetGeocodeState();
+    resetWeatherState();
+    resetRouteAnalysisState();
     setActiveTab("forecast");
   }
 
@@ -288,7 +301,7 @@ export default function HomePage() {
     setWeather(null);
     setRouteAnalysis(null);
     setRouteError(null);
-    weatherForecast.setAnalysisRunMs(null);
+    setAnalysisRunMs(null);
     setResults([]);
     if (showOnboarding) {
       setShowOnboarding(false);
@@ -298,11 +311,11 @@ export default function HomePage() {
 
   const loadWeatherForPlace = useCallback(
     async (place: GeocodeResult, options?: { focusForecastSection?: boolean }): Promise<void> => {
-      routeAnalysisState.setRouteError(null);
-      routeAnalysisState.setRouteAnalysis(null);
-      geocode.setResults([]);
-      geocode.setAddressResults([]);
-      await weatherForecast.loadWeather(place);
+      setRouteAnalysis(null);
+      setRouteError(null);
+      setResults([]);
+      setAddressResults([]);
+      await loadWeather(place);
 
       if (options?.focusForecastSection) {
         setActiveTab("forecast");
@@ -310,7 +323,7 @@ export default function HomePage() {
         scrollToSection(weatherSectionRef);
       }
     },
-    [geocode, routeAnalysisState, weatherForecast]
+    [loadWeather, setAddressResults, setResults, setRouteAnalysis, setRouteError]
   );
 
 
