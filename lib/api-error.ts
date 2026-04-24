@@ -51,6 +51,7 @@ export function mapUnexpectedApiError(
   const isExternalServiceError =
     normalizedMessage === "fetch failed" ||
     /svarte med\s\d{3}/i.test(message) ||
+    (normalizedMessage.includes("svarte ikke") && hasProviderName) ||
     normalizedMessage.includes("svarte ikke raskt nok") ||
     normalizedMessage.includes("timed out") ||
     normalizedMessage.includes("timeout") ||
