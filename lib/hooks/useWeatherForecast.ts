@@ -29,9 +29,18 @@ export function useWeatherForecast(flowVersion: number) {
     setAnalysisRunMs(null);
 
     try {
+      const requestUrl = new URL("/api/weather", window.location.origin);
+      requestUrl.searchParams.set("lat", String(place.lat));
+      requestUrl.searchParams.set("lon", String(place.lon));
+      requestUrl.searchParams.set("label", place.name);
+      requestUrl.searchParams.set("_ts", String(Date.now()));
+
       const response = await fetch(
-        `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`,
-        { signal: controller.signal }
+        requestUrl.toString(),
+        {
+          signal: controller.signal,
+          cache: "no-store"
+        }
       );
       const payload = (await response.json()) as WeatherResponse;
 

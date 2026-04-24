@@ -5,6 +5,8 @@ interface WeatherSymbolBadgeProps {
   compact?: boolean;
 }
 
+const YR_SYMBOL_BASE_URL = "https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg";
+
 function normalizeSymbolCode(symbolCode?: string): string {
   const value = symbolCode?.trim().toLowerCase();
   return value && value.length > 0 ? value : "unknown";
@@ -33,7 +35,7 @@ export function WeatherSymbolBadge({ symbolCode, compact = false }: WeatherSymbo
       title={`Vær: ${label}`}
     >
       <Image
-        src={`/api/weather-symbol?code=${encodeURIComponent(normalized)}`}
+        src={`${YR_SYMBOL_BASE_URL}/${encodeURIComponent(normalized)}.svg`}
         alt=""
         width={compact ? 16 : 20}
         height={compact ? 16 : 20}

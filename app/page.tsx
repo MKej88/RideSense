@@ -6,11 +6,9 @@ import { GeocodeResult } from "@/lib/types";
 import { formatAgeInMinutes, formatOsloDateTime, getOsloDayKey, isOlderThanMinutes } from "@/lib/time-format";
 import {
   buildBestWindowFromHours,
-  getCurrentOrNextHour,
   getForecastDays,
   getVisibleWeatherHours
 } from "@/lib/forecast-display";
-import { ScoreBadge } from "@/components/ScoreBadge";
 import {
   getAreaContextLabel,
   isSameAreaQuery,
@@ -66,7 +64,7 @@ export default function HomePage() {
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
-  const [flowVersion, setFlowVersion] = useState(0);
+  const flowVersion = 0;
   const [routeAnalysisRunId, setRouteAnalysisRunId] = useState(0);
   const [routeAnalysisStartedAt, setRouteAnalysisStartedAt] = useState<number | null>(null);
   const [routeStatusTick, setRouteStatusTick] = useState(() => Date.now());
@@ -90,8 +88,7 @@ export default function HomePage() {
     setError,
     analysisRunMs,
     loadWeather,
-    setAnalysisRunMs,
-    resetWeatherState
+    setAnalysisRunMs
   } = weatherForecast;
   const clearWeatherErrorOnPlaceSearch = useCallback(() => {
     setError(null);
@@ -130,8 +127,7 @@ export default function HomePage() {
     setSelectedRouteStart,
     searchError,
     setSearchError,
-    setResults,
-    resetGeocodeState
+    setResults
   } = geocode;
   const {
     routeAnalysis,
@@ -139,8 +135,7 @@ export default function HomePage() {
     routeLoading,
     routeError,
     setRouteError,
-    analyzeRoutes,
-    resetRouteAnalysisState
+    analyzeRoutes
   } = routeAnalysisState;
 
   const routeProgressSteps = [
@@ -239,27 +234,6 @@ export default function HomePage() {
     }, 120);
   }
 
-  function activateTabAndScroll(
-    tab: "forecast" | "routes",
-    ref: { current: HTMLElement | HTMLDivElement | null }
-  ): void {
-    if (activeTab === tab) {
-      scrollToSection(ref);
-      return;
-    }
-
-    setActiveTab(tab);
-    scrollToSection(ref);
-  }
-
-  function resetFlow(): void {
-    setFlowVersion((previous) => previous + 1);
-    resetGeocodeState();
-    resetWeatherState();
-    resetRouteAnalysisState();
-    setActiveTab("forecast");
-  }
-
   function searchPlace(event: FormEvent): void {
     event.preventDefault();
   }
@@ -281,6 +255,8 @@ export default function HomePage() {
       setShowOnboarding(false);
       persistOnboardingDismissed();
     }
+
+    void loadWeatherForPlace(place, { focusForecastSection: true });
   }
 
   const loadWeatherForPlace = useCallback(
@@ -409,44 +385,6 @@ export default function HomePage() {
     () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
     [activeTab, selected, selectedRouteStart]
   );
-
-  const compactBestWindow = useMemo(() => {
-    if (routeAnalysis) {
-      return routeAnalysis.bestWindowNext24h || routeAnalysis.bestWindowNext7d;
-    }
-
-    return visibleBestWindow24h || visibleBestWindow7d;
-  }, [routeAnalysis, visibleBestWindow24h, visibleBestWindow7d]);
-
-  const compactScoreHour = useMemo(() => {
-    if (routeAnalysis?.hours.length) {
-      return getCurrentOrNextHour(routeAnalysis.hours, staleCheckTick);
-    }
-
-    if (!weather) {
-      return null;
-    }
-
-    return getCurrentOrNextHour(weather.hours, staleCheckTick);
-  }, [routeAnalysis, staleCheckTick, weather]);
-
-  const compactSelectionLabel = useMemo(() => {
-    if (routeAnalysis) {
-      return `${routeAnalysis.route.startLabel} → ${routeAnalysis.route.endLabel}`;
-    }
-
-    if (selected?.name) {
-      return selected.name;
-    }
-
-    if (weather?.locationLabel) {
-      return weather.locationLabel;
-    }
-
-    return null;
-  }, [routeAnalysis, selected, weather]);
-
-  const shouldShowCompactPanel = Boolean(weather || routeAnalysis);
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -599,81 +537,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="rs-surface p-4">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={resetFlow}
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-          >
-            Start på nytt
-          </button>
-        </div>
-      </section>
-
-      {shouldShowCompactPanel && (
-        <section className="rs-surface sticky top-3 z-20 p-4">
-          <div className="grid gap-4 md:grid-cols-[1.1fr_1fr_auto] md:items-center">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Valgt sted/rute</p>
-              <p className="mt-1 text-sm font-medium text-slate-100">
-                {compactSelectionLabel || "Ikke valgt"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Beste vindu</p>
-              <p className="mt-1 text-sm font-medium text-slate-100">
-                {compactBestWindow
-                  ? `${formatOsloDateTime(compactBestWindow.startTime)}–${formatOsloDateTime(compactBestWindow.endTime)}`
-                  : "Ikke tilgjengelig ennå"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Score-status nå</p>
-              <div className="mt-1">
-                {compactScoreHour ? (
-                  <ScoreBadge label={compactScoreHour.scoreLabel} score={compactScoreHour.score} />
-                ) : (
-                  <span className="text-sm text-slate-400">Ingen score ennå</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("forecast", locationSectionRef)}
-            >
-              Til stedvalg
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("forecast", weatherSectionRef)}
-            >
-              Til vær
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("routes", routeSectionRef)}
-            >
-              Til ruteanalyse
-            </button>
-            {mapAnchor ? (
-              <button
-                type="button"
-                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-                onClick={() => activateTabAndScroll("routes", mapSectionRef)}
-              >
-                Til kart
-              </button>
-            ) : null}
-          </div>
-        </section>
-      )}
-
       {activeTab === "forecast" && (
       <div className="rs-section-shell">
       <section ref={locationSectionRef} className="rs-surface p-6">
@@ -731,7 +594,6 @@ export default function HomePage() {
             className="mt-3 inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-60"
             onClick={() => {
               chooseArea(osloQuickCity);
-              void loadWeatherForPlace(osloQuickCity, { focusForecastSection: true });
             }}
             disabled={weatherLoading || addressLoading || placeLoading}
           >
@@ -748,7 +610,6 @@ export default function HomePage() {
                 className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
                 onClick={() => {
                   chooseArea(city);
-                  void loadWeatherForPlace(city, { focusForecastSection: true });
                 }}
                 disabled={weatherLoading || addressLoading || placeLoading}
               >
@@ -769,7 +630,6 @@ export default function HomePage() {
                   className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
                   onClick={() => {
                     chooseArea(place);
-                    void loadWeatherForPlace(place, { focusForecastSection: true });
                   }}
                 >
                   {place.name}
