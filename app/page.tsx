@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { BestWindow, GeocodeResult, RouteTimeAnalysisResponse, WeatherResponse } from "@/lib/types";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BestWindow, GeocodeResult, WeatherResponse } from "@/lib/types";
 import {
   formatAgeInMinutes,
   formatOsloDateTime,
@@ -11,10 +11,13 @@ import {
   OSLO_TIME_ZONE
 } from "@/lib/time-format";
 import { ScoreBadge } from "@/components/ScoreBadge";
-
-interface ApiError {
-  error: string;
-}
+import {
+  getAreaContextLabel,
+  isSameAreaQuery,
+  useGeocodeSearch
+} from "@/lib/hooks/useGeocodeSearch";
+import { useWeatherForecast } from "@/lib/hooks/useWeatherForecast";
+import { useRouteAnalysis } from "@/lib/hooks/useRouteAnalysis";
 
 const BestWindowCard = dynamic(
   () => import("@/components/BestWindowCard").then((module) => module.BestWindowCard)
@@ -35,8 +38,6 @@ const WeatherTable = dynamic(
   () => import("@/components/WeatherTable").then((module) => module.WeatherTable)
 );
 
-const PLACE_SEARCH_DEBOUNCE_MS = 180;
-const ADDRESS_SEARCH_DEBOUNCE_MS = 180;
 const ONBOARDING_DISMISSED_KEY = "ridesense.onboarding.dismissed";
 const QUICK_CITIES: GeocodeResult[] = [
   { name: "Oslo", lat: 59.9139, lon: 10.7522 },
@@ -68,20 +69,6 @@ const osloHourFormatter = new Intl.DateTimeFormat("nb-NO", {
   hour12: false,
   timeZone: OSLO_TIME_ZONE
 });
-
-function getAreaContextLabel(place: GeocodeResult): string {
-  const primaryName = place.name.split(",")[0]?.trim();
-
-  return primaryName || place.county || "Norge";
-}
-
-function isSameAreaQuery(query: string, place: GeocodeResult | null): boolean {
-  if (!place) {
-    return false;
-  }
-
-  return query.trim() === getAreaContextLabel(place);
-}
 
 function getOsloHour(time: string): number {
   return Number(osloHourFormatter.format(new Date(time)));
@@ -159,35 +146,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(true);
-  const [results, setResults] = useState<GeocodeResult[]>([]);
-  const [placeLoading, setPlaceLoading] = useState(false);
-  const [selectedArea, setSelectedArea] = useState<GeocodeResult | null>(null);
-  const [addressQuery, setAddressQuery] = useState("");
-  const [addressResults, setAddressResults] = useState<GeocodeResult[]>([]);
-  const [addressLoading, setAddressLoading] = useState(false);
-  const [addressError, setAddressError] = useState<string | null>(null);
-  const [stopQuery, setStopQuery] = useState("");
-  const [stopResults, setStopResults] = useState<GeocodeResult[]>([]);
-  const [stopLoading, setStopLoading] = useState(false);
-  const [stopError, setStopError] = useState<string | null>(null);
-  const [selectedStop, setSelectedStop] = useState<GeocodeResult | null>(null);
-  const [selectedRouteStart, setSelectedRouteStart] = useState<GeocodeResult | null>(null);
-  const [selected, setSelected] = useState<GeocodeResult | null>(null);
-  const [weather, setWeather] = useState<WeatherResponse | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [routeAnalysis, setRouteAnalysis] = useState<RouteTimeAnalysisResponse | null>(null);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [routeError, setRouteError] = useState<string | null>(null);
-  const [analysisRunMs, setAnalysisRunMs] = useState<number | null>(null);
-  const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const addressCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const stopCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const deferredQuery = useDeferredValue(query);
-  const deferredAddressQuery = useDeferredValue(addressQuery);
-  const deferredStopQuery = useDeferredValue(stopQuery);
+  const [flowVersion, setFlowVersion] = useState(0);
   const startSectionRef = useRef<HTMLDivElement | null>(null);
   const locationSectionRef = useRef<HTMLElement | null>(null);
   const weatherSectionRef = useRef<HTMLElement | null>(null);
@@ -196,13 +156,70 @@ export default function HomePage() {
   const prevStep1Ref = useRef(false);
   const prevStep2Ref = useRef(false);
   const prevStep3Ref = useRef(false);
-  const flowVersionRef = useRef(0);
-  const placeAbortRef = useRef<AbortController | null>(null);
-  const addressAbortRef = useRef<AbortController | null>(null);
-  const stopAbortRef = useRef<AbortController | null>(null);
-  const weatherAbortRef = useRef<AbortController | null>(null);
-  const routeAbortRef = useRef<AbortController | null>(null);
   const onboardingDismissedFallbackRef = useRef(false);
+  const weatherForecast = useWeatherForecast(flowVersion);
+  const {
+    selected,
+    setSelected,
+    weather,
+    setWeather,
+    weatherLoading,
+    error,
+    setError,
+    analysisRunMs,
+    loadWeather,
+    setAnalysisRunMs,
+    resetWeatherState
+  } = weatherForecast;
+  const clearWeatherErrorOnPlaceSearch = useCallback(() => {
+    setError(null);
+  }, [setError]);
+
+  const geocode = useGeocodeSearch({
+    activeTab,
+    flowVersion,
+    onPlaceSearchStart: clearWeatherErrorOnPlaceSearch
+  });
+  const routeAnalysisState = useRouteAnalysis(flowVersion);
+  const {
+    query,
+    setQuery,
+    results,
+    placeLoading,
+    selectedArea,
+    setSelectedArea,
+    addressQuery,
+    setAddressQuery,
+    addressResults,
+    setAddressResults,
+    addressLoading,
+    addressError,
+    setAddressError,
+    stopQuery,
+    setStopQuery,
+    stopResults,
+    setStopResults,
+    stopLoading,
+    stopError,
+    setStopError,
+    selectedStop,
+    setSelectedStop,
+    selectedRouteStart,
+    setSelectedRouteStart,
+    searchError,
+    setSearchError,
+    setResults,
+    resetGeocodeState
+  } = geocode;
+  const {
+    routeAnalysis,
+    setRouteAnalysis,
+    routeLoading,
+    routeError,
+    setRouteError,
+    analyzeRoutes,
+    resetRouteAnalysisState
+  } = routeAnalysisState;
 
   function readOnboardingDismissed(): boolean {
     try {
@@ -270,39 +287,10 @@ export default function HomePage() {
   }
 
   function resetFlow(): void {
-    flowVersionRef.current += 1;
-    placeAbortRef.current?.abort();
-    addressAbortRef.current?.abort();
-    stopAbortRef.current?.abort();
-    weatherAbortRef.current?.abort();
-    routeAbortRef.current?.abort();
-    placeAbortRef.current = null;
-    addressAbortRef.current = null;
-    stopAbortRef.current = null;
-    weatherAbortRef.current = null;
-    routeAbortRef.current = null;
-    setQuery("");
-    setResults([]);
-    setPlaceLoading(false);
-    setSelectedArea(null);
-    setAddressQuery("");
-    setAddressResults([]);
-    setAddressLoading(false);
-    setAddressError(null);
-    setStopQuery("");
-    setStopResults([]);
-    setStopLoading(false);
-    setStopError(null);
-    setSelectedStop(null);
-    setSelectedRouteStart(null);
-    setSelected(null);
-    setWeather(null);
-    setWeatherLoading(false);
-    setError(null);
-    setRouteAnalysis(null);
-    setRouteLoading(false);
-    setRouteError(null);
-    setAnalysisRunMs(null);
+    setFlowVersion((previous) => previous + 1);
+    resetGeocodeState();
+    resetWeatherState();
+    resetRouteAnalysisState();
     setActiveTab("forecast");
   }
 
@@ -329,413 +317,22 @@ export default function HomePage() {
     }
   }
 
-  useEffect(() => {
-    const flowVersion = flowVersionRef.current;
-    const trimmedQuery = deferredQuery.trim();
-
-    if (isSameAreaQuery(trimmedQuery, selectedArea)) {
-      setPlaceLoading(false);
-      return;
-    }
-
-    if (trimmedQuery.length < 2) {
-      setResults([]);
-      setPlaceLoading(false);
-      return;
-    }
-
-    let active = true;
-    const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
-    const controller = new AbortController();
-    placeAbortRef.current?.abort();
-    placeAbortRef.current = controller;
-    const timeoutId = window.setTimeout(async () => {
-      if (flowVersion !== flowVersionRef.current || placeAbortRef.current !== controller) {
-        return;
-      }
-
-      const cachedResults = placeCacheRef.current.get(cacheKey);
-
-      if (cachedResults) {
-        setResults(cachedResults);
-        setPlaceLoading(false);
-        setError(null);
-        return;
-      }
-
-      setPlaceLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
-          signal: controller.signal
-        });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke sted.");
-        }
-
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          placeAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        const nextResults = payload.results || [];
-        placeCacheRef.current.set(cacheKey, nextResults);
-        setResults(nextResults);
-      } catch (caughtError) {
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          placeAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        if (caughtError instanceof Error && caughtError.name === "AbortError") {
-          return;
-        }
-
-        setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stedsøk.");
-        setResults([]);
-      } finally {
-        if (
-          active &&
-          flowVersion === flowVersionRef.current &&
-          placeAbortRef.current === controller
-        ) {
-          placeAbortRef.current = null;
-          setPlaceLoading(false);
-        }
-      }
-    }, PLACE_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      active = false;
-      controller.abort();
-      if (placeAbortRef.current === controller) {
-        placeAbortRef.current = null;
-      }
-      window.clearTimeout(timeoutId);
-      setPlaceLoading(false);
-    };
-  }, [deferredQuery, selectedArea]);
-
-  useEffect(() => {
-    const flowVersion = flowVersionRef.current;
-    const trimmedQuery = deferredAddressQuery.trim();
-    const scopedArea = activeTab === "routes" ? null : selectedArea;
-
-    if (trimmedQuery.length < 2) {
-      setAddressResults([]);
-      setAddressError(null);
-      setAddressLoading(false);
-      return;
-    }
-
-    let active = true;
-    const contextPart = scopedArea ? scopedArea.name : "norge";
-    const cacheKey = `${trimmedQuery.toLocaleLowerCase("nb-NO")}::${contextPart.toLocaleLowerCase("nb-NO")}`;
-    const controller = new AbortController();
-    addressAbortRef.current?.abort();
-    addressAbortRef.current = controller;
-    const timeoutId = window.setTimeout(async () => {
-      if (flowVersion !== flowVersionRef.current || addressAbortRef.current !== controller) {
-        return;
-      }
-
-      const cachedResults = addressCacheRef.current.get(cacheKey);
-
-      if (cachedResults) {
-        setAddressResults(cachedResults);
-        setAddressLoading(false);
-        setAddressError(null);
-        return;
-      }
-
-      setAddressLoading(true);
-      setAddressError(null);
-
-      try {
-        const url = scopedArea
-          ? `/api/geocode?q=${encodeURIComponent(trimmedQuery)}&context=${encodeURIComponent(
-              areaContext
-            )}&nearLat=${scopedArea.lat}&nearLon=${scopedArea.lon}`
-          : `/api/geocode?q=${encodeURIComponent(trimmedQuery)}`;
-        const response = await fetch(url, {
-          signal: controller.signal
-        });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke adresse.");
-        }
-
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          addressAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        const nextResults = payload.results || [];
-        addressCacheRef.current.set(cacheKey, nextResults);
-        setAddressResults(nextResults);
-      } catch (caughtError) {
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          addressAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        if (caughtError instanceof Error && caughtError.name === "AbortError") {
-          return;
-        }
-
-        setAddressError(
-          caughtError instanceof Error ? caughtError.message : "Ukjent feil ved adressesøk."
-        );
-        setAddressResults([]);
-      } finally {
-        if (
-          active &&
-          flowVersion === flowVersionRef.current &&
-          addressAbortRef.current === controller
-        ) {
-          addressAbortRef.current = null;
-          setAddressLoading(false);
-        }
-      }
-    }, ADDRESS_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      active = false;
-      controller.abort();
-      if (addressAbortRef.current === controller) {
-        addressAbortRef.current = null;
-      }
-      window.clearTimeout(timeoutId);
-    };
-  }, [activeTab, deferredAddressQuery, areaContext, selectedArea]);
-
-
-  useEffect(() => {
-    const flowVersion = flowVersionRef.current;
-    const trimmedQuery = deferredStopQuery.trim();
-
-    if (trimmedQuery.length < 2) {
-      setStopResults([]);
-      setStopError(null);
-      setStopLoading(false);
-      return;
-    }
-
-    let active = true;
-    const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
-    const controller = new AbortController();
-    stopAbortRef.current?.abort();
-    stopAbortRef.current = controller;
-    const timeoutId = window.setTimeout(async () => {
-      if (flowVersion !== flowVersionRef.current || stopAbortRef.current !== controller) {
-        return;
-      }
-
-      const cachedResults = stopCacheRef.current.get(cacheKey);
-
-      if (cachedResults) {
-        setStopResults(cachedResults);
-        setStopLoading(false);
-        setStopError(null);
-        return;
-      }
-
-      setStopLoading(true);
-      setStopError(null);
-
-      try {
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(trimmedQuery)}`, {
-          signal: controller.signal
-        });
-        const payload = (await response.json()) as { results?: GeocodeResult[] } & ApiError;
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Klarte ikke å søke stoppadresse.");
-        }
-
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          stopAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        const nextResults = payload.results || [];
-        stopCacheRef.current.set(cacheKey, nextResults);
-        setStopResults(nextResults);
-      } catch (caughtError) {
-        if (
-          !active ||
-          flowVersion !== flowVersionRef.current ||
-          stopAbortRef.current !== controller
-        ) {
-          return;
-        }
-
-        if (caughtError instanceof Error && caughtError.name === "AbortError") {
-          return;
-        }
-
-        setStopError(
-          caughtError instanceof Error ? caughtError.message : "Ukjent feil ved stopp-søk."
-        );
-        setStopResults([]);
-      } finally {
-        if (
-          active &&
-          flowVersion === flowVersionRef.current &&
-          stopAbortRef.current === controller
-        ) {
-          stopAbortRef.current = null;
-          setStopLoading(false);
-        }
-      }
-    }, ADDRESS_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      active = false;
-      controller.abort();
-      if (stopAbortRef.current === controller) {
-        stopAbortRef.current = null;
-      }
-      window.clearTimeout(timeoutId);
-    };
-  }, [deferredStopQuery]);
-
-  const loadWeatherForPlace = useCallback(async (
-    place: GeocodeResult,
-    options?: { focusForecastSection?: boolean }
-  ): Promise<void> => {
-    const flowVersion = flowVersionRef.current;
-    const controller = new AbortController();
-    weatherAbortRef.current?.abort();
-    weatherAbortRef.current = controller;
-
-    setWeatherLoading(true);
-    setError(null);
-    setRouteError(null);
-    setSelected(place);
-    setWeather(null);
-    setRouteAnalysis(null);
-    setAnalysisRunMs(null);
-
-    try {
-      const response = await fetch(
-        `/api/weather?lat=${place.lat}&lon=${place.lon}&label=${encodeURIComponent(place.name)}`,
-        {
-          signal: controller.signal
-        }
-      );
-      const payload = (await response.json()) as WeatherResponse & ApiError;
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å hente værdata.");
-      }
-
-      if (flowVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
-        return;
-      }
-
-      setAnalysisRunMs(Date.now());
-      setWeather(payload);
+  const loadWeatherForPlace = useCallback(
+    async (place: GeocodeResult, options?: { focusForecastSection?: boolean }): Promise<void> => {
+      setRouteAnalysis(null);
+      setRouteError(null);
       setResults([]);
       setAddressResults([]);
+      await loadWeather(place);
 
       if (options?.focusForecastSection) {
         setActiveTab("forecast");
         setForecastRange("24h");
         scrollToSection(weatherSectionRef);
       }
-    } catch (caughtError) {
-      if (caughtError instanceof Error && caughtError.name === "AbortError") {
-        return;
-      }
-
-      if (flowVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
-        return;
-      }
-
-      setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
-      setWeather(null);
-      setAnalysisRunMs(null);
-    } finally {
-      if (weatherAbortRef.current === controller) {
-        weatherAbortRef.current = null;
-        setWeatherLoading(false);
-      }
-    }
-  }, []);
-
-  const analyzeRoutes = useCallback(async (): Promise<void> => {
-    if (!selectedRouteStart || !selectedStop) {
-      setRouteError("Velg både startadresse og stoppadresse før analyse.");
-      return;
-    }
-
-    const flowVersion = flowVersionRef.current;
-    const controller = new AbortController();
-    routeAbortRef.current?.abort();
-    routeAbortRef.current = controller;
-
-    setRouteLoading(true);
-    setRouteError(null);
-    setRouteAnalysis(null);
-
-    try {
-      const response = await fetch(
-        `/api/route-analysis?startLat=${selectedRouteStart.lat}&startLon=${selectedRouteStart.lon}&stopLat=${selectedStop.lat}&stopLon=${selectedStop.lon}&startLabel=${encodeURIComponent(selectedRouteStart.name)}&stopLabel=${encodeURIComponent(selectedStop.name)}`,
-        {
-          signal: controller.signal
-        }
-      );
-      const payload = (await response.json()) as RouteTimeAnalysisResponse & ApiError;
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Klarte ikke å analysere ruten.");
-      }
-
-      if (flowVersion !== flowVersionRef.current || routeAbortRef.current !== controller) {
-        return;
-      }
-
-      setRouteAnalysis(payload);
-    } catch (caughtError) {
-      if (caughtError instanceof Error && caughtError.name === "AbortError") {
-        return;
-      }
-
-      if (flowVersion !== flowVersionRef.current || routeAbortRef.current !== controller) {
-        return;
-      }
-
-      setRouteError(
-        caughtError instanceof Error ? caughtError.message : "Ukjent feil ved ruteanalyse."
-      );
-      setRouteAnalysis(null);
-    } finally {
-      if (routeAbortRef.current === controller) {
-        routeAbortRef.current = null;
-        setRouteLoading(false);
-      }
-    }
-  }, [selectedRouteStart, selectedStop]);
+    },
+    [loadWeather, setAddressResults, setResults, setRouteAnalysis, setRouteError]
+  );
 
 
   const visibleWeatherHours = useMemo(() => {
@@ -943,7 +540,7 @@ export default function HomePage() {
 
       await loadWeatherForPlace(movedPlace);
     },
-    [activeTab, loadWeatherForPlace]
+    [activeTab, loadWeatherForPlace, setRouteAnalysis, setRouteError, setSelectedRouteStart]
   );
 
   useEffect(() => {
@@ -969,16 +566,6 @@ export default function HomePage() {
     }
     prevStep3Ref.current = step3Completed;
   }, [step3Completed]);
-
-  useEffect(() => {
-    return () => {
-      placeAbortRef.current?.abort();
-      addressAbortRef.current?.abort();
-      stopAbortRef.current?.abort();
-      weatherAbortRef.current?.abort();
-      routeAbortRef.current?.abort();
-    };
-  }, []);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 px-4 py-8 md:gap-14">
@@ -1267,16 +854,30 @@ export default function HomePage() {
           </ul>
         )}
 
-        {!placeLoading && query.trim().length >= 2 && results.length === 0 && !selectedArea && !error && (
+        {!placeLoading &&
+          query.trim().length >= 2 &&
+          results.length === 0 &&
+          !selectedArea &&
+          !searchError && (
           <p className="mt-3 text-sm text-slate-400">
             Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
           </p>
         )}
 
-        {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
+        {searchError && (
+          <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">
+            {searchError}
+          </p>
+        )}
 
       </section>
       </div>
+      )}
+
+      {error && activeTab === "forecast" && (
+        <section className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">
+          {error}
+        </section>
       )}
 
       {!weather && !weatherLoading && !error && activeTab === "forecast" && (
@@ -1553,7 +1154,7 @@ export default function HomePage() {
 
             <button
               type="button"
-              onClick={() => void analyzeRoutes()}
+              onClick={() => void analyzeRoutes(selectedRouteStart, selectedStop)}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
               disabled={
                 !selectedRouteStart ||
