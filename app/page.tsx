@@ -39,6 +39,8 @@ const WeatherTable = dynamic(
 );
 
 const ONBOARDING_DISMISSED_KEY = "ridesense.onboarding.dismissed";
+const ROUTE_ANALYSIS_HELP_DELAY_MS = 7000;
+const ROUTE_ANALYSIS_STEP_WINDOW_MS = 2500;
 const QUICK_CITIES: GeocodeResult[] = [
   { name: "Oslo", lat: 59.9139, lon: 10.7522 },
   { name: "Bærum", lat: 59.8939, lon: 10.523 },
@@ -148,6 +150,9 @@ export default function HomePage() {
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
   const [flowVersion, setFlowVersion] = useState(0);
+  const [routeAnalysisRunId, setRouteAnalysisRunId] = useState(0);
+  const [routeAnalysisStartedAt, setRouteAnalysisStartedAt] = useState<number | null>(null);
+  const [routeStatusTick, setRouteStatusTick] = useState(() => Date.now());
   const startSectionRef = useRef<HTMLDivElement | null>(null);
   const locationSectionRef = useRef<HTMLElement | null>(null);
   const weatherSectionRef = useRef<HTMLElement | null>(null);
@@ -220,6 +225,50 @@ export default function HomePage() {
     analyzeRoutes,
     resetRouteAnalysisState
   } = routeAnalysisState;
+
+  const routeProgressSteps = [
+    "Validerer start og stopp",
+    "Henter rutedata",
+    "Henter vær for prøvepunkter",
+    "Beregner score og oppsummering"
+  ];
+
+  const routeElapsedMs = routeLoading && routeAnalysisStartedAt ? routeStatusTick - routeAnalysisStartedAt : 0;
+  const activeRouteStepIndex = routeLoading
+    ? Math.min(
+        Math.floor(routeElapsedMs / ROUTE_ANALYSIS_STEP_WINDOW_MS),
+        routeProgressSteps.length - 1
+      )
+    : -1;
+  const showRouteHelpText = routeLoading && routeElapsedMs >= ROUTE_ANALYSIS_HELP_DELAY_MS;
+
+  useEffect(() => {
+    if (!routeLoading) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setRouteStatusTick(Date.now());
+    }, 400);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [routeLoading]);
+
+  useEffect(() => {
+    if (!routeLoading) {
+      return;
+    }
+
+    setRouteAnalysisStartedAt(Date.now());
+    setRouteStatusTick(Date.now());
+  }, [routeLoading, routeAnalysisRunId]);
+
+  function handleAnalyzeSelectedRoute(): void {
+    setRouteAnalysisRunId((currentRunId) => currentRunId + 1);
+    void analyzeRoutes(selectedRouteStart, selectedStop);
+  }
 
   function readOnboardingDismissed(): boolean {
     try {
@@ -1154,7 +1203,7 @@ export default function HomePage() {
 
             <button
               type="button"
-              onClick={() => void analyzeRoutes(selectedRouteStart, selectedStop)}
+              onClick={handleAnalyzeSelectedRoute}
               className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
               disabled={
                 !selectedRouteStart ||
@@ -1167,6 +1216,62 @@ export default function HomePage() {
             >
               Analyser valgt rute
             </button>
+
+            {routeLoading ? (
+              <div className="mt-4 rounded-xl border border-cyan-700/45 bg-cyan-950/20 p-4">
+                <p className="text-sm font-medium text-cyan-100">
+                  Ny analyse startet. Status er nullstilt for denne kjøringen.
+                </p>
+                <ol className="mt-3 space-y-2">
+                  {routeProgressSteps.map((step, index) => {
+                    const isCompleted = index < activeRouteStepIndex;
+                    const isActive = index === activeRouteStepIndex;
+                    const isPending = index > activeRouteStepIndex;
+
+                    return (
+                      <li
+                        key={step}
+                        className="flex items-center gap-3 rounded-md border border-slate-700/70 bg-slate-900/70 px-3 py-2"
+                      >
+                        <span
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
+                            isCompleted
+                              ? "bg-emerald-500/20 text-emerald-200"
+                              : isActive
+                                ? "bg-cyan-500/20 text-cyan-100"
+                                : "bg-slate-700 text-slate-300"
+                          }`}
+                        >
+                          {isCompleted ? "✓" : index + 1}
+                        </span>
+                        <span
+                          className={`text-sm ${
+                            isPending
+                              ? "text-slate-400"
+                              : isActive
+                                ? "text-cyan-100"
+                                : "text-slate-200"
+                          }`}
+                        >
+                          {step}
+                        </span>
+                        {isActive ? (
+                          <span
+                            className="ml-auto inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-200 border-r-transparent"
+                            aria-label="Aktivt steg"
+                          />
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ol>
+                {showRouteHelpText ? (
+                  <p className="mt-3 text-xs text-cyan-200/90">
+                    Dette tar litt tid akkurat nå. Vi venter på svar fra kart- og værtjenester.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {routeError && (
