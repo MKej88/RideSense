@@ -64,6 +64,7 @@ export function useGeocodeSearch({ activeTab, flowVersion }: UseGeocodeSearchPar
 
     if (isSameAreaQuery(trimmedQuery, selectedArea)) {
       setPlaceLoading(false);
+      setSearchError(null);
       return;
     }
 
