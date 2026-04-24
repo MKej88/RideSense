@@ -158,9 +158,22 @@ export default function HomePage() {
   const prevStep3Ref = useRef(false);
   const onboardingDismissedFallbackRef = useRef(false);
   const weatherForecast = useWeatherForecast(flowVersion);
+  const {
+    selected,
+    setSelected,
+    weather,
+    setWeather,
+    weatherLoading,
+    error,
+    setError,
+    analysisRunMs,
+    loadWeather,
+    setAnalysisRunMs,
+    resetWeatherState
+  } = weatherForecast;
   const clearWeatherErrorOnPlaceSearch = useCallback(() => {
-    weatherForecast.setError(null);
-  }, [weatherForecast]);
+    setError(null);
+  }, [setError]);
 
   const geocode = useGeocodeSearch({
     activeTab,
@@ -198,19 +211,6 @@ export default function HomePage() {
     setResults,
     resetGeocodeState
   } = geocode;
-  const {
-    selected,
-    setSelected,
-    weather,
-    setWeather,
-    weatherLoading,
-    error,
-    setError,
-    analysisRunMs,
-    loadWeather,
-    setAnalysisRunMs,
-    resetWeatherState
-  } = weatherForecast;
   const {
     routeAnalysis,
     setRouteAnalysis,
