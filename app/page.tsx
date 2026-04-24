@@ -981,7 +981,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-4 py-8 md:gap-12">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 px-4 py-8 md:gap-14">
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
@@ -1163,8 +1163,9 @@ export default function HomePage() {
       )}
 
       {activeTab === "forecast" && (
+      <div className="rs-section-shell">
       <section ref={locationSectionRef} className="rs-surface p-6">
-        <h2 className="text-lg font-semibold text-slate-100">Velg sted</h2>
+        <h2 className="text-lg font-semibold text-slate-100">Seksjon 1 · Velg område</h2>
         <p className="mt-1 text-sm text-slate-400">
           Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
         </p>
@@ -1275,6 +1276,7 @@ export default function HomePage() {
         {error && <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</p>}
 
       </section>
+      </div>
       )}
 
       {!weather && !weatherLoading && !error && activeTab === "forecast" && (
@@ -1288,9 +1290,10 @@ export default function HomePage() {
       )}
 
       {weather && activeTab === "forecast" && (
-        <section ref={weatherSectionRef} className="space-y-6">
+        <section ref={weatherSectionRef} className="rs-section-shell space-y-6">
           <div className="rs-surface p-4">
-            <h2 className="text-lg font-semibold">Sted: {selected?.name || weather.locationLabel}</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Seksjon 2 · Vær og tidspunkt</h2>
+            <p className="mt-1 text-sm text-slate-300">Sted: {selected?.name || weather.locationLabel}</p>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
                 type="button"
@@ -1426,14 +1429,14 @@ export default function HomePage() {
       )}
 
       {activeTab === "routes" && (
-        <section ref={routeSectionRef} className="space-y-6">
+        <section ref={routeSectionRef} className="rs-section-shell space-y-6">
           <div
             ref={startSectionRef}
             className={`rs-surface p-5 ${
               step1Completed ? "" : "pointer-events-none opacity-45"
             }`}
           >
-            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Seksjon 3 · Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
               Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
               sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
@@ -1656,7 +1659,8 @@ export default function HomePage() {
       )}
 
       {mapAnchor && (
-        <section ref={mapSectionRef}>
+        <section ref={mapSectionRef} className="rs-section-shell space-y-3">
+          <h2 className="px-2 text-lg font-semibold text-slate-100">Seksjon 4 · Kart</h2>
           <LocationMap
             lat={mapAnchor.lat}
             lon={mapAnchor.lon}
