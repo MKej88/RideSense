@@ -43,6 +43,7 @@ export function mapUnexpectedApiError(
     normalizedMessage.includes("met api") ||
     normalizedMessage.includes("overpass") ||
     normalizedMessage.includes("geonorge") ||
+    normalizedMessage.includes("kartverket") ||
     normalizedMessage.includes("nominatim") ||
     normalizedMessage.includes("open-meteo") ||
     normalizedMessage.includes("værtjenesten") ||
