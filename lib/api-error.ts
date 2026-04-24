@@ -38,8 +38,16 @@ export function mapUnexpectedApiError(
   }
 ): ApiErrorDetails {
   const message = error instanceof Error ? error.message : "Ukjent feil";
+  const normalizedMessage = message.toLowerCase();
+  const isExternalServiceError =
+    normalizedMessage === "fetch failed" ||
+    /svarte med\s\d{3}/i.test(message) ||
+    normalizedMessage.includes("svarte ikke raskt nok") ||
+    normalizedMessage.includes("timed out") ||
+    normalizedMessage.includes("timeout") ||
+    normalizedMessage.includes("etimedout");
 
-  if (message === "fetch failed" || /svarte med\s\d{3}/i.test(message)) {
+  if (isExternalServiceError) {
     return {
       code: "EKSTERN_TJENESTE_FEIL",
       message: "Vi fikk ikke svar fra en ekstern tjeneste akkurat nå.",
