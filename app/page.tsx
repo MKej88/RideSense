@@ -3,7 +3,12 @@
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GeocodeResult } from "@/lib/types";
-import { formatAgeInMinutes, formatOsloDateTime, getOsloDayKey, isOlderThanMinutes } from "@/lib/time-format";
+import {
+  formatAgeInMinutes,
+  formatOsloDateTime,
+  getOsloDayKey,
+  isOlderThanMinutes
+} from "@/lib/time-format";
 import {
   buildBestWindowFromHours,
   getForecastDays,
@@ -15,7 +20,6 @@ import {
   useGeocodeSearch
 } from "@/lib/hooks/useGeocodeSearch";
 import { useWeatherForecast } from "@/lib/hooks/useWeatherForecast";
-import { useRouteAnalysis } from "@/lib/hooks/useRouteAnalysis";
 
 const BestWindowCard = dynamic(
   () => import("@/components/BestWindowCard").then((module) => module.BestWindowCard)
@@ -36,9 +40,6 @@ const WeatherTable = dynamic(
   () => import("@/components/WeatherTable").then((module) => module.WeatherTable)
 );
 
-const ONBOARDING_DISMISSED_KEY = "ridesense.onboarding.dismissed";
-const ROUTE_ANALYSIS_HELP_DELAY_MS = 7000;
-const ROUTE_ANALYSIS_STEP_WINDOW_MS = 2500;
 const QUICK_CITIES: GeocodeResult[] = [
   { name: "Oslo", lat: 59.9139, lon: 10.7522 },
   { name: "Bærum", lat: 59.8939, lon: 10.523 },
@@ -60,24 +61,11 @@ const QUICK_CITIES: GeocodeResult[] = [
 export default function HomePage() {
   const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
   const staleThresholdMinutes = 60;
-  const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(true);
-  const flowVersion = 0;
-  const [routeAnalysisRunId, setRouteAnalysisRunId] = useState(0);
-  const [routeAnalysisStartedAt, setRouteAnalysisStartedAt] = useState<number | null>(null);
-  const [routeStatusTick, setRouteStatusTick] = useState(() => Date.now());
-  const startSectionRef = useRef<HTMLDivElement | null>(null);
-  const locationSectionRef = useRef<HTMLElement | null>(null);
   const weatherSectionRef = useRef<HTMLElement | null>(null);
-  const routeSectionRef = useRef<HTMLElement | null>(null);
-  const mapSectionRef = useRef<HTMLElement | null>(null);
-  const prevStep1Ref = useRef(false);
-  const prevStep2Ref = useRef(false);
-  const prevStep3Ref = useRef(false);
-  const onboardingDismissedFallbackRef = useRef(false);
-  const weatherForecast = useWeatherForecast(flowVersion);
+
+  const weatherForecast = useWeatherForecast(0);
   const {
     selected,
     setSelected,
@@ -87,19 +75,13 @@ export default function HomePage() {
     error,
     setError,
     analysisRunMs,
-    loadWeather,
-    setAnalysisRunMs
+    loadWeather
   } = weatherForecast;
-  const clearWeatherErrorOnPlaceSearch = useCallback(() => {
-    setError(null);
-  }, [setError]);
 
   const geocode = useGeocodeSearch({
-    activeTab,
-    flowVersion,
-    onPlaceSearchStart: clearWeatherErrorOnPlaceSearch
+    onPlaceSearchStart: () => setError(null)
   });
-  const routeAnalysisState = useRouteAnalysis(flowVersion);
+
   const {
     query,
     setQuery,
@@ -107,106 +89,10 @@ export default function HomePage() {
     placeLoading,
     selectedArea,
     setSelectedArea,
-    addressQuery,
-    setAddressQuery,
-    addressResults,
-    setAddressResults,
-    addressLoading,
-    addressError,
-    setAddressError,
-    stopQuery,
-    setStopQuery,
-    stopResults,
-    setStopResults,
-    stopLoading,
-    stopError,
-    setStopError,
-    selectedStop,
-    setSelectedStop,
-    selectedRouteStart,
-    setSelectedRouteStart,
     searchError,
     setSearchError,
     setResults
   } = geocode;
-  const {
-    routeAnalysis,
-    setRouteAnalysis,
-    routeLoading,
-    routeError,
-    setRouteError,
-    analyzeRoutes
-  } = routeAnalysisState;
-
-  const routeProgressSteps = [
-    "Validerer start og stopp",
-    "Henter rutedata",
-    "Henter vær for prøvepunkter",
-    "Beregner score og oppsummering"
-  ];
-
-  const routeElapsedMs = routeLoading && routeAnalysisStartedAt ? routeStatusTick - routeAnalysisStartedAt : 0;
-  const activeRouteStepIndex = routeLoading
-    ? Math.min(
-        Math.floor(routeElapsedMs / ROUTE_ANALYSIS_STEP_WINDOW_MS),
-        routeProgressSteps.length - 1
-      )
-    : -1;
-  const showRouteHelpText = routeLoading && routeElapsedMs >= ROUTE_ANALYSIS_HELP_DELAY_MS;
-
-  useEffect(() => {
-    if (!routeLoading) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setRouteStatusTick(Date.now());
-    }, 400);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [routeLoading]);
-
-  useEffect(() => {
-    if (!routeLoading) {
-      return;
-    }
-
-    setRouteAnalysisStartedAt(Date.now());
-    setRouteStatusTick(Date.now());
-  }, [routeLoading, routeAnalysisRunId]);
-
-  function handleAnalyzeSelectedRoute(): void {
-    setRouteAnalysisRunId((currentRunId) => currentRunId + 1);
-    void analyzeRoutes(selectedRouteStart, selectedStop);
-  }
-
-  function readOnboardingDismissed(): boolean {
-    try {
-      return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
-    } catch {
-      return onboardingDismissedFallbackRef.current;
-    }
-  }
-
-  function persistOnboardingDismissed(): void {
-    onboardingDismissedFallbackRef.current = true;
-
-    try {
-      window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
-    } catch {
-      // Ignore storage failures (for example blocked Web Storage).
-    }
-  }
-
-  useEffect(() => {
-    const onboardingDismissed = readOnboardingDismissed();
-
-    if (onboardingDismissed) {
-      setShowOnboarding(false);
-    }
-  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -216,66 +102,36 @@ export default function HomePage() {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const areaContext = selectedArea ? getAreaContextLabel(selectedArea) : "";
-  const osloQuickCity = QUICK_CITIES.find((city) => city.name === "Oslo");
-  const step1Completed = Boolean(selectedArea);
-  const step2Completed = Boolean(selectedRouteStart);
-  const step3Completed = Boolean(
-    weather &&
-      selectedRouteStart &&
-      selected &&
-      selected.lat === selectedRouteStart.lat &&
-      selected.lon === selectedRouteStart.lon
-  );
-
-  function scrollToSection(ref: { current: HTMLElement | HTMLDivElement | null }): void {
+  function scrollToSection(ref: { current: HTMLElement | null }): void {
     window.setTimeout(() => {
       ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 120);
   }
 
-  function searchPlace(event: FormEvent): void {
-    event.preventDefault();
-  }
+  const loadWeatherForPlace = useCallback(
+    async (place: GeocodeResult): Promise<void> => {
+      setResults([]);
+      await loadWeather(place);
+      scrollToSection(weatherSectionRef);
+    },
+    [loadWeather, setResults]
+  );
 
   function chooseArea(place: GeocodeResult): void {
     setQuery(getAreaContextLabel(place));
     setSelectedArea(place);
-    setAddressQuery("");
-    setAddressResults([]);
-    setAddressError(null);
     setSelected(null);
-    setSelectedRouteStart(null);
     setWeather(null);
-    setRouteAnalysis(null);
-    setRouteError(null);
-    setAnalysisRunMs(null);
+    setError(null);
+    setSearchError(null);
     setResults([]);
-    if (showOnboarding) {
-      setShowOnboarding(false);
-      persistOnboardingDismissed();
-    }
 
-    void loadWeatherForPlace(place, { focusForecastSection: true });
+    void loadWeatherForPlace(place);
   }
 
-  const loadWeatherForPlace = useCallback(
-    async (place: GeocodeResult, options?: { focusForecastSection?: boolean }): Promise<void> => {
-      setRouteAnalysis(null);
-      setRouteError(null);
-      setResults([]);
-      setAddressResults([]);
-      await loadWeather(place);
-
-      if (options?.focusForecastSection) {
-        setActiveTab("forecast");
-        setForecastRange("24h");
-        scrollToSection(weatherSectionRef);
-      }
-    },
-    [loadWeather, setAddressResults, setResults, setRouteAnalysis, setRouteError]
-  );
-
+  function searchPlace(event: FormEvent): void {
+    event.preventDefault();
+  }
 
   const visibleWeatherHours = useMemo(
     () => getVisibleWeatherHours(weather, analysisRunMs, forecastRange),
@@ -366,25 +222,7 @@ export default function HomePage() {
     return `Oppdatert for ${formatAgeInMinutes(updatedWeatherAt, staleCheckTick)} siden`;
   }, [staleCheckTick, updatedWeatherAt]);
 
-  const isRouteDataStale = useMemo(() => {
-    if (!routeAnalysis) {
-      return false;
-    }
-
-    return isOlderThanMinutes(routeAnalysis.analyzedAt, staleThresholdMinutes, staleCheckTick);
-  }, [routeAnalysis, staleCheckTick, staleThresholdMinutes]);
-
-  const routeAnalysisAgeText = useMemo(() => {
-    if (!routeAnalysis) {
-      return null;
-    }
-
-    return `Oppdatert for ${formatAgeInMinutes(routeAnalysis.analyzedAt, staleCheckTick)} siden`;
-  }, [routeAnalysis, staleCheckTick]);
-  const mapAnchor = useMemo(
-    () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
-    [activeTab, selected, selectedRouteStart]
-  );
+  const mapAnchor = selected || selectedArea;
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -394,288 +232,137 @@ export default function HomePage() {
         lon
       };
 
-      if (activeTab === "routes") {
-        setSelectedRouteStart(movedPlace);
-        setRouteAnalysis(null);
-        setRouteError(null);
-        return;
-      }
-
+      setSelectedArea(movedPlace);
+      setQuery(getAreaContextLabel(movedPlace));
       await loadWeatherForPlace(movedPlace);
     },
-    [activeTab, loadWeatherForPlace, setRouteAnalysis, setRouteError, setSelectedRouteStart]
+    [loadWeatherForPlace, setQuery, setSelectedArea]
   );
 
-  useEffect(() => {
-    if (step1Completed && !prevStep1Ref.current) {
-      setActiveTab("routes");
-      scrollToSection(startSectionRef);
-    }
-    prevStep1Ref.current = step1Completed;
-  }, [step1Completed]);
-
-  useEffect(() => {
-    if (step2Completed && !prevStep2Ref.current) {
-      setActiveTab("forecast");
-      scrollToSection(weatherSectionRef);
-    }
-    prevStep2Ref.current = step2Completed;
-  }, [step2Completed]);
-
-  useEffect(() => {
-    if (step3Completed && !prevStep3Ref.current) {
-      setActiveTab("routes");
-      scrollToSection(routeSectionRef);
-    }
-    prevStep3Ref.current = step3Completed;
-  }, [step3Completed]);
+  const osloQuickCity = QUICK_CITIES.find((city) => city.name === "Oslo");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 px-4 py-8 md:gap-14">
       <section className="relative overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#020b23] p-6 shadow-[0_30px_80px_-40px_rgba(34,211,238,0.55)] md:p-8">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.07)_1px,transparent_1px)] bg-[size:36px_36px]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(45,212,191,0.28),rgba(2,11,35,0)_38%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_85%,rgba(14,165,233,0.22),rgba(2,11,35,0)_45%)]" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#020b23]/95 via-[#031533]/78 to-[#021021]/58" />
-          <svg viewBox="0 0 1000 320" className="absolute inset-x-0 bottom-0 h-[72%] w-full opacity-90" aria-hidden="true">
-            <defs>
-              <linearGradient id="heroPathGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0" />
-                <stop offset="48%" stopColor="#22d3ee" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0.28" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M-40 250 C140 225, 220 150, 360 176 S610 260, 1030 72"
-              fill="none"
-              stroke="url(#heroPathGlow)"
-              strokeWidth="6"
-              strokeLinecap="round"
-            />
-            <path
-              d="M-80 275 C140 244, 300 298, 500 262 S810 190, 1060 162"
-              fill="none"
-              stroke="rgba(34,211,238,0.28)"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
-
-        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-900/55 px-3 py-1 text-xs font-medium text-cyan-100 backdrop-blur-md">
-              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
-              Smart sykkelprognose
-            </div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white md:text-5xl">RideSense</h1>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-100/95 md:text-xl">
-              Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
-            </p>
-
-            <div className="mt-6 inline-flex rounded-2xl border border-cyan-300/25 bg-slate-900/55 p-1.5 backdrop-blur-md">
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "forecast"
-                    ? "bg-[#061739] text-cyan-100 ring-1 ring-cyan-300/45 shadow-[0_6px_18px_-10px_rgba(34,211,238,0.8)]"
-                    : "text-slate-200 hover:bg-cyan-400/10"
-                }`}
-                onClick={() => setActiveTab("forecast")}
-              >
-                Vær og tidspunkt
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  activeTab === "routes"
-                    ? "bg-gradient-to-r from-cyan-500/95 to-teal-400/90 text-slate-950 shadow-[0_8px_22px_-12px_rgba(45,212,191,0.8)]"
-                    : "text-slate-200 hover:bg-cyan-400/10"
-                }`}
-                onClick={() => setActiveTab("routes")}
-              >
-                Ruteanalyse
-              </button>
-            </div>
-          </div>
-
-          <div className="relative hidden min-h-[240px] items-center justify-center lg:flex">
-            <div className="absolute right-4 top-4 rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
-                <path
-                  d="M18 34a10 10 0 1 1 4-19 12 12 0 0 1 22 8h1a8 8 0 1 1 0 16H18z"
-                  fill="none"
-                  stroke="#67e8f9"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="42" cy="13" r="3" fill="#5eead4" />
-              </svg>
-            </div>
-            <div className="absolute right-16 top-[96px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 68 44" className="h-10 w-14" aria-hidden="true">
-                <circle cx="14" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <circle cx="50" cy="30" r="10" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <path
-                  d="M14 30l14-14h12l14 14M28 16l-7-6h-9"
-                  fill="none"
-                  stroke="#2dd4bf"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <div className="absolute right-0 top-[126px] rounded-2xl border border-cyan-300/25 bg-slate-900/45 p-4 backdrop-blur-md">
-              <svg viewBox="0 0 56 56" className="h-12 w-12" aria-hidden="true">
-                <circle cx="28" cy="28" r="20" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
-                <path d="M28 28V15M28 28l10 6" stroke="#99f6e4" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {activeTab === "forecast" && (
-      <div className="rs-section-shell">
-      <section ref={locationSectionRef} className="rs-surface p-6">
-        <h2 className="text-lg font-semibold text-slate-100">Velg område</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
+        <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">RideSense</h1>
+        <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-100/95 md:text-xl">
+          Legg inn sted for å få tydelig værscore og beste sykkeltidspunkt.
         </p>
-
-        {showOnboarding && !selectedArea && (
-          <div className="mt-4 grid gap-2 rounded-xl border border-cyan-300/30 bg-slate-900/60 p-3 text-sm text-cyan-100 md:grid-cols-3">
-            <p className="rounded-md bg-slate-800/70 p-2">
-              📍 <strong>1.</strong> Velg område.
-            </p>
-            <p className="rounded-md bg-slate-800/70 p-2">
-              🌤️ <strong>2.</strong> Se værscore time for time.
-            </p>
-            <p className="rounded-md bg-slate-800/70 p-2">
-              🚴 <strong>3.</strong> Finn beste tidspunkt.
-            </p>
-          </div>
-        )}
-
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
-          <input
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-            placeholder="Søk sted i Norge"
-            value={query}
-            onChange={(event) => {
-              const nextQuery = event.target.value;
-              setQuery(nextQuery);
-
-              if (!isSameAreaQuery(nextQuery, selectedArea)) {
-                setSelectedArea(null);
-                setAddressQuery("");
-                setAddressResults([]);
-                setAddressError(null);
-                setSelected(null);
-                setWeather(null);
-                setRouteAnalysis(null);
-                            setRouteError(null);
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-600 disabled:opacity-60"
-            disabled={weatherLoading || addressLoading || placeLoading || query.trim().length < 2}
-          >
-            Søk
-          </button>
-        </form>
-        {osloQuickCity && (
-          <button
-            type="button"
-            className="mt-3 inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-60"
-            onClick={() => {
-              chooseArea(osloQuickCity);
-            }}
-            disabled={weatherLoading || addressLoading || placeLoading}
-          >
-            Prøv med Oslo
-          </button>
-        )}
-        <div className="mt-4">
-          <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
-          <div className="grid grid-cols-5 gap-2">
-            {QUICK_CITIES.map((city) => (
-              <button
-                key={`${city.name}-${city.lat}-${city.lon}`}
-                type="button"
-                className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
-                onClick={() => {
-                  chooseArea(city);
-                }}
-                disabled={weatherLoading || addressLoading || placeLoading}
-              >
-                {city.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
-
-        {results.length > 0 && (
-          <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-            {results.map((place) => (
-              <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                <button
-                  type="button"
-                  className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
-                  onClick={() => {
-                    chooseArea(place);
-                  }}
-                >
-                  {place.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {!placeLoading &&
-          query.trim().length >= 2 &&
-          results.length === 0 &&
-          !selectedArea &&
-          !searchError && (
-          <p className="mt-3 text-sm text-slate-400">
-            Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
-          </p>
-        )}
-
-        {searchError && (
-          <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">
-            {searchError}
-          </p>
-        )}
-
       </section>
-      </div>
-      )}
 
-      {error && activeTab === "forecast" && (
-        <section className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">
-          {error}
+      <section className="rs-section-shell">
+        <section className="rs-surface p-6">
+          <h2 className="text-lg font-semibold text-slate-100">Velg område</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
+          </p>
+
+          <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
+            <input
+              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+              placeholder="Søk sted i Norge"
+              value={query}
+              onChange={(event) => {
+                const nextQuery = event.target.value;
+                setQuery(nextQuery);
+
+                if (!isSameAreaQuery(nextQuery, selectedArea)) {
+                  setSelectedArea(null);
+                  setSelected(null);
+                  setWeather(null);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-white hover:bg-slate-600 disabled:opacity-60"
+              disabled={weatherLoading || placeLoading || query.trim().length < 2}
+            >
+              Søk
+            </button>
+          </form>
+
+          {osloQuickCity && (
+            <button
+              type="button"
+              className="mt-3 inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-60"
+              onClick={() => {
+                chooseArea(osloQuickCity);
+              }}
+              disabled={weatherLoading || placeLoading}
+            >
+              Prøv med Oslo
+            </button>
+          )}
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Hurtigvalg</p>
+            <div className="grid grid-cols-5 gap-2">
+              {QUICK_CITIES.map((city) => (
+                <button
+                  key={`${city.name}-${city.lat}-${city.lon}`}
+                  type="button"
+                  className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+                  onClick={() => {
+                    chooseArea(city);
+                  }}
+                  disabled={weatherLoading || placeLoading}
+                >
+                  {city.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {placeLoading && <p className="mt-3 text-sm text-slate-400">Søker steder …</p>}
+
+          {results.length > 0 && (
+            <ul className="mt-4 space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              {results.map((place) => (
+                <li key={`${place.name}-${place.lat}-${place.lon}`}>
+                  <button
+                    type="button"
+                    className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
+                    onClick={() => {
+                      chooseArea(place);
+                    }}
+                  >
+                    {place.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!placeLoading &&
+            query.trim().length >= 2 &&
+            results.length === 0 &&
+            !selectedArea &&
+            !searchError && (
+              <p className="mt-3 text-sm text-slate-400">
+                Ingen steder funnet ennå. Fortsett å skrive eller prøv annet stedsnavn.
+              </p>
+            )}
+
+          {searchError && (
+            <p className="mt-4 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{searchError}</p>
+          )}
         </section>
-      )}
+      </section>
 
-      {!weather && !weatherLoading && !error && activeTab === "forecast" && (
+      {error && <section className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{error}</section>}
+
+      {!weather && !weatherLoading && !error && (
         <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
           Velg et sted for å se værtime-for-time, værscore og dagens beste tidsvindu.
         </section>
       )}
 
-      {weatherLoading && activeTab === "forecast" && (
+      {weatherLoading && (
         <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
       )}
 
-      {weather && activeTab === "forecast" && (
+      {weather && (
         <section ref={weatherSectionRef} className="rs-section-shell space-y-6">
           <div className="rs-surface p-4">
             <h2 className="text-lg font-semibold text-slate-100">Vær og tidspunkt</h2>
@@ -780,6 +467,7 @@ export default function HomePage() {
               </div>
             </div>
           )}
+
           {forecastRange === "7d" && (
             <BestWindowCard
               bestWindow={selectedForecastDayData?.bestWindow || null}
@@ -791,293 +479,20 @@ export default function HomePage() {
               emptyMessage="Ingen gyldige timer for valgt dag."
             />
           )}
+
           <ScoreModelInfo />
           <WeatherTable hours={displayedForecastHours} />
         </section>
       )}
 
-      {activeTab === "routes" && (
-        <section ref={routeSectionRef} className="rs-section-shell space-y-6">
-          <div
-            ref={startSectionRef}
-            className={`rs-surface p-5 ${
-              step1Completed ? "" : "pointer-events-none opacity-45"
-            }`}
-          >
-            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
-              sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
-            </p>
-            <p className="mt-2 text-xs text-slate-400">
-              Trinn 2: Velg først startpunkt. Trinn 3: Se vær før du analyserer ruten.
-            </p>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rs-surface-subtle p-4">
-                <h3 className="text-base font-semibold text-slate-100">Startadresse</h3>
-                <input
-                  className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                  placeholder="Søk startadresse i Norge"
-                value={addressQuery}
-                onChange={(event) => {
-                  setAddressQuery(event.target.value);
-                  setAddressError(null);
-                  setSelectedRouteStart(null);
-                  setRouteAnalysis(null);
-                }}
-                />
-                {addressLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
-                {addressError && (
-                  <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{addressError}</p>
-                )}
-                {addressResults.length > 0 && (
-                  <ul className="mt-3 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
-                    {addressResults.map((place) => (
-                      <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                        <button
-                          type="button"
-                          className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
-                          onClick={() => {
-                            setSelectedRouteStart(place);
-                            setAddressQuery(place.name);
-                            setAddressResults([]);
-                          }}
-                        >
-                          {place.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="rs-surface-subtle p-4">
-                <h3 className="text-base font-semibold text-slate-100">Stoppadresse</h3>
-                <input
-                  className="mt-3 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
-                  placeholder="Søk stoppadresse i Norge"
-                  value={stopQuery}
-                  onChange={(event) => {
-                    setStopQuery(event.target.value);
-                    setStopError(null);
-                    setSelectedStop(null);
-                    setRouteAnalysis(null);
-                  }}
-                />
-                {stopLoading && <p className="mt-3 text-sm text-slate-400">Søker adresser …</p>}
-                {stopError && (
-                  <p className="mt-3 rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">{stopError}</p>
-                )}
-                {stopResults.length > 0 && (
-                  <ul className="mt-3 space-y-2 rounded-lg border border-slate-700 bg-slate-900 p-3">
-                    {stopResults.map((place) => (
-                      <li key={`${place.name}-${place.lat}-${place.lon}`}>
-                        <button
-                          type="button"
-                          className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-800"
-                          onClick={() => {
-                            setSelectedStop(place);
-                            setStopQuery(place.name);
-                            setStopResults([]);
-                          }}
-                        >
-                          {place.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rs-surface-subtle rs-card-layout p-3">
-                <p className="rs-card-title">Start</p>
-                <p className="text-sm font-medium text-slate-100">
-                  {selectedRouteStart?.name || "Ikke valgt"}
-                </p>
-              </div>
-              <div className="rs-surface-subtle rs-card-layout p-3">
-                <p className="rs-card-title">Stopp</p>
-                <p className="text-sm font-medium text-slate-100">{selectedStop?.name || "Ikke valgt"}</p>
-              </div>
-            </div>
-            <div className="mt-3">
-              <button
-                type="button"
-                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                onClick={() => {
-                  if (!selectedRouteStart) {
-                    return;
-                  }
-                  void loadWeatherForPlace(selectedRouteStart);
-                }}
-                disabled={!selectedRouteStart || weatherLoading}
-              >
-                Se vær for startpunkt
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleAnalyzeSelectedRoute}
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-600 disabled:opacity-60"
-              disabled={
-                !selectedRouteStart ||
-                !selectedStop ||
-                !step3Completed ||
-                routeLoading ||
-                addressLoading ||
-                stopLoading
-              }
-            >
-              Analyser valgt rute
-            </button>
-
-            {routeLoading ? (
-              <div className="mt-4 rounded-xl border border-cyan-700/45 bg-cyan-950/20 p-4">
-                <p className="text-sm font-medium text-cyan-100">
-                  Ny analyse startet. Status er nullstilt for denne kjøringen.
-                </p>
-                <ol className="mt-3 space-y-2">
-                  {routeProgressSteps.map((step, index) => {
-                    const isCompleted = index < activeRouteStepIndex;
-                    const isActive = index === activeRouteStepIndex;
-                    const isPending = index > activeRouteStepIndex;
-
-                    return (
-                      <li
-                        key={step}
-                        className="flex items-center gap-3 rounded-md border border-slate-700/70 bg-slate-900/70 px-3 py-2"
-                      >
-                        <span
-                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
-                            isCompleted
-                              ? "bg-emerald-500/20 text-emerald-200"
-                              : isActive
-                                ? "bg-cyan-500/20 text-cyan-100"
-                                : "bg-slate-700 text-slate-300"
-                          }`}
-                        >
-                          {isCompleted ? "✓" : index + 1}
-                        </span>
-                        <span
-                          className={`text-sm ${
-                            isPending
-                              ? "text-slate-400"
-                              : isActive
-                                ? "text-cyan-100"
-                                : "text-slate-200"
-                          }`}
-                        >
-                          {step}
-                        </span>
-                        {isActive ? (
-                          <span
-                            className="ml-auto inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-200 border-r-transparent"
-                            aria-label="Aktivt steg"
-                          />
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
-                {showRouteHelpText ? (
-                  <p className="mt-3 text-xs text-cyan-200/90">
-                    Dette tar litt tid akkurat nå. Vi venter på svar fra kart- og værtjenester.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {routeError && (
-            <div className="rounded-xl bg-rose-950/40 p-4 text-sm text-rose-300">{routeError}</div>
-          )}
-
-          {routeAnalysis && (
-            <section className="rs-surface space-y-5 p-4">
-              {routeAnalysisAgeText ? (
-                <p className={`text-sm ${isRouteDataStale ? "text-rose-300" : "text-emerald-300"}`}>
-                  {routeAnalysisAgeText}
-                </p>
-              ) : null}
-              <p className="text-xs text-slate-400">
-                Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
-              </p>
-              <div className="-mt-2 flex flex-wrap items-center gap-3">
-              </div>
-              <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rs-surface-subtle rs-card-layout p-3">
-                  <p className="rs-card-title">
-                    {routeAnalysis.route.isRoundTrip ? "Distanse tur/retur" : "Distanse en vei"}
-                  </p>
-                  <p className="rs-card-metric">{routeAnalysis.route.distanceKm} km</p>
-                </div>
-                <div className="rs-surface-subtle rs-card-layout p-3">
-                  <p className="rs-card-title">En vei</p>
-                  <p className="rs-card-metric">{routeAnalysis.route.oneWayDistanceKm} km</p>
-                </div>
-                <div className="rs-surface-subtle rs-card-layout p-3">
-                  <p className="rs-card-title">Prøvepunkter</p>
-                  <p className="rs-card-metric">{routeAnalysis.sampledPoints.length}</p>
-                </div>
-              </div>
-              {!routeAnalysis.route.isRoundTrip ? (
-                <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200">
-                  {routeAnalysis.route.description.includes("uten veigeometri")
-                    ? "Fant ikke kjørbar veigeometri nå. Analysen vises likevel, men ruten tegnes ikke på kartet før karttjenesten svarer."
-                    : "Fant ikke trygg/gyldig returrute nå. Viser derfor enveisanalyse for valgt retning."}
-                </p>
-              ) : null}
-
-              <BestWindowCard
-                bestWindow={routeAnalysis.bestWindowNext24h}
-                title="Beste tidspunkt neste 24 timer (valgt rute)"
-                emptyMessage="Fant ingen gyldige timer de neste 24 timene."
-                includeDay
-              />
-              <BestWindowCard
-                bestWindow={routeAnalysis.bestWindowNext7d}
-                title="Beste tidspunkt neste 7 dager (valgt rute)"
-                emptyMessage="Fant ingen gyldige timer de neste 7 dagene."
-                includeDay
-              />
-
-              <WeatherTable
-                hours={routeAnalysis.hours.map((hour) => ({
-                  ...hour,
-                  tailwindMs: hour.tailwindMs,
-                  scoreReasons: [`Medvindskomponent: ${hour.tailwindMs.toFixed(1)} m/s`],
-                  dataBasis: "forecast_only",
-                  confidence: {
-                    score: 70,
-                    level: "medium",
-                    reason: "Basert på kombinert ruteprognose"
-                  }
-                }))}
-              />
-            </section>
-          )}
-        </section>
-      )}
-
       {mapAnchor && (
-        <section ref={mapSectionRef} className="rs-section-shell space-y-3">
+        <section className="rs-section-shell space-y-3">
           <h2 className="px-2 text-lg font-semibold text-slate-100">Kart</h2>
           <LocationMap
             lat={mapAnchor.lat}
             lon={mapAnchor.lon}
             label={mapAnchor.name}
             onMarkerMoved={onMarkerMoved}
-            routeName={routeAnalysis?.route.shortName || null}
-            routePoints={
-              routeAnalysis?.route.description.includes("uten veigeometri")
-                ? []
-                : routeAnalysis?.route.points || []
-            }
           />
         </section>
       )}

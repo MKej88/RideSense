@@ -1,5 +1,4 @@
 import {
-  RouteScoreSummary,
   ScoreLabel,
   ScoredWeatherHour,
   StationObservation,
@@ -287,46 +286,6 @@ export function calculateBikeScore(
   };
 }
 
-export function calculateRouteScore(hours: ScoredWeatherHour[]): RouteScoreSummary {
-  if (hours.length === 0) {
-    return {
-      score: 0,
-      scoreLabel: "bad",
-      explanation: "Ingen værpunkter tilgjengelig for ruten.",
-      averageWindSpeed: 0,
-      averagePrecipitation: 0,
-      averageTemperature: 0,
-      scoreSpread: 0
-    };
-  }
-
-  const averageScore =
-    hours.reduce((sum, hour) => sum + hour.score, 0) / hours.length;
-  const scores = hours.map((hour) => hour.score);
-  const scoreSpread = Math.max(...scores) - Math.min(...scores);
-  const averageWindSpeed =
-    hours.reduce((sum, hour) => sum + hour.windSpeed, 0) / hours.length;
-  const averagePrecipitation =
-    hours.reduce((sum, hour) => sum + hour.precipitationAmount, 0) / hours.length;
-  const averageTemperature =
-    hours.reduce((sum, hour) => sum + hour.airTemperature, 0) / hours.length;
-
-  const routeScore = Math.max(
-    0,
-    Math.min(100, Math.round(averageScore - scoreSpread * 0.2))
-  );
-
-  return {
-    score: routeScore,
-    scoreLabel: getScoreLabel(routeScore),
-    explanation: summarizeRoute(hours),
-    averageWindSpeed: roundToOneDecimal(averageWindSpeed),
-    averagePrecipitation: roundToOneDecimal(averagePrecipitation),
-    averageTemperature: roundToOneDecimal(averageTemperature),
-    scoreSpread: roundToOneDecimal(scoreSpread)
-  };
-}
-
 export function findBestWindowToday(hours: ScoredWeatherHour[]): {
   startTime: string;
   endTime: string;
@@ -427,38 +386,4 @@ function summarizeWindow(hours: ScoredWeatherHour[]): string {
   }
 
   return "Dette er dagens beste kompromiss mellom vind, nedbør og temperatur.";
-}
-
-function summarizeRoute(hours: ScoredWeatherHour[]): string {
-  const avgWind = hours.reduce((sum, hour) => sum + hour.windSpeed, 0) / hours.length;
-  const avgRain =
-    hours.reduce((sum, hour) => sum + hour.precipitationAmount, 0) / hours.length;
-  const coldPoints = hours.filter(
-    (hour) => hour.airTemperature < SCORE_THRESHOLDS.idealTempMin
-  ).length;
-
-  if (
-    avgRain < SCORE_THRESHOLDS.lightRainStart &&
-    avgWind < SCORE_THRESHOLDS.moderateWindStart
-  ) {
-    return "Lite vind og lav nedbørsrisiko gir en jevn og trygg rute akkurat nå.";
-  }
-
-  if (avgWind >= SCORE_THRESHOLDS.strongWindStart) {
-    return "Vind er den største utfordringen på denne ruten akkurat nå.";
-  }
-
-  if (avgRain >= SCORE_THRESHOLDS.lightRainStart) {
-    return "Nedbørsrisiko på deler av ruten trekker totalscoren ned.";
-  }
-
-  if (coldPoints >= Math.ceil(hours.length / 2)) {
-    return "Ruten er ganske kjølig, men ellers forholdsvis stabil akkurat nå.";
-  }
-
-  return "Forholdene er brukbare, men varierer litt mellom punktene på ruten.";
-}
-
-function roundToOneDecimal(value: number): number {
-  return Math.round(value * 10) / 10;
 }
