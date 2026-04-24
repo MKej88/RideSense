@@ -78,8 +78,12 @@ export default function HomePage() {
     loadWeather
   } = weatherForecast;
 
+  const handlePlaceSearchStart = useCallback(() => {
+    setError(null);
+  }, [setError]);
+
   const geocode = useGeocodeSearch({
-    onPlaceSearchStart: () => setError(null)
+    onPlaceSearchStart: handlePlaceSearchStart
   });
 
   const {
