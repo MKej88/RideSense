@@ -64,3 +64,20 @@ def test_download_symbol_returns_false_on_network_error(
 
     assert result is False
     assert not (tmp_path / "clearsky_day.svg").exists()
+
+
+def test_download_symbol_returns_false_on_empty_response(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is False
+    assert not (tmp_path / "clearsky_day.svg").exists()

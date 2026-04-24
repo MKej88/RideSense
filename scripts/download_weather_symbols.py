@@ -106,6 +106,9 @@ def download_symbol(symbol_code: str) -> bool:
     except (HTTPError, URLError):
         return False
 
+    if not svg_bytes.strip():
+        return False
+
     target_path.write_bytes(svg_bytes)
     return True
 
