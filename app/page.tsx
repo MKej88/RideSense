@@ -866,6 +866,12 @@ export default function HomePage() {
       </div>
       )}
 
+      {error && activeTab === "forecast" && (
+        <section className="rounded-md bg-rose-950/40 p-3 text-sm text-rose-300">
+          {error}
+        </section>
+      )}
+
       {!weather && !weatherLoading && !error && activeTab === "forecast" && (
         <section className="rounded-xl border border-dashed border-slate-600 bg-slate-800/60 p-8 text-center text-slate-400">
           Velg et sted for å se værtime-for-time, værscore og dagens beste tidsvindu.
