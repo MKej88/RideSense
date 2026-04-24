@@ -23,22 +23,15 @@ export function WeatherSymbolBadge({ symbolCode, compact = false }: WeatherSymbo
   const label = formatSymbolLabel(symbolCode);
 
   return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-md border border-slate-600 bg-slate-800/80 px-2 py-1 text-slate-100 ${
-        compact ? "text-xs" : "text-sm"
-      }`}
-      aria-label={`Vær: ${label}`}
-      title={`Vær: ${label}`}
-    >
+    <span className="inline-flex items-center justify-center" aria-label={`Vær: ${label}`} title={label}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/api/weather-symbol?code=${encodeURIComponent(normalized)}`}
         alt=""
-        width={compact ? 16 : 20}
-        height={compact ? 16 : 20}
-        className="h-4 w-4 object-contain"
+        width={compact ? 28 : 36}
+        height={compact ? 28 : 36}
+        className={`${compact ? "h-7 w-7" : "h-9 w-9"} object-contain`}
       />
-      <span>{label}</span>
     </span>
   );
 }

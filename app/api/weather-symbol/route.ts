@@ -6,6 +6,8 @@ const SYMBOLS_DIR = path.join(process.cwd(), "public", "weather-symbols");
 const DEFAULT_SYMBOL = "unknown.svg";
 const YR_SYMBOL_BASE_URL =
   "https://www.yr.no/assets/images/weather-symbols/dark-mode/default/svg";
+const MET_GITHUB_SYMBOL_BASE_URL =
+  "https://raw.githubusercontent.com/metno/weathericons/main/weather/svg";
 
 function sanitizeSymbolCode(input: string | null): string {
   if (!input) {
@@ -33,29 +35,36 @@ async function readSymbolFile(fileName: string): Promise<string> {
 }
 
 async function fetchSymbolFromYr(symbolCode: string): Promise<string | null> {
-  const remoteUrl = `${YR_SYMBOL_BASE_URL}/${symbolCode}.svg`;
+  const urls = [
+    `${YR_SYMBOL_BASE_URL}/${symbolCode}.svg`,
+    `${MET_GITHUB_SYMBOL_BASE_URL}/${symbolCode}.svg`
+  ];
 
-  try {
-    const response = await fetch(remoteUrl, {
-      headers: {
-        "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
-      },
-      next: { revalidate: 86400 }
-    });
+  for (const remoteUrl of urls) {
+    try {
+      const response = await fetch(remoteUrl, {
+        headers: {
+          "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
+        },
+        next: { revalidate: 86400 }
+      });
 
-    if (!response.ok) {
-      return null;
+      if (!response.ok) {
+        continue;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("image/svg+xml")) {
+        continue;
+      }
+
+      return response.text();
+    } catch {
+      continue;
     }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("image/svg+xml")) {
-      return null;
-    }
-
-    return response.text();
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 async function writeSymbolToCache(fileName: string, svgContent: string): Promise<void> {
