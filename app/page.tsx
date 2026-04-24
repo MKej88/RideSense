@@ -6,11 +6,9 @@ import { GeocodeResult } from "@/lib/types";
 import { formatAgeInMinutes, formatOsloDateTime, getOsloDayKey, isOlderThanMinutes } from "@/lib/time-format";
 import {
   buildBestWindowFromHours,
-  getCurrentOrNextHour,
   getForecastDays,
   getVisibleWeatherHours
 } from "@/lib/forecast-display";
-import { ScoreBadge } from "@/components/ScoreBadge";
 import {
   getAreaContextLabel,
   isSameAreaQuery,
@@ -61,12 +59,12 @@ const QUICK_CITIES: GeocodeResult[] = [
 
 export default function HomePage() {
   const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
-  const [staleThresholdMinutes, setStaleThresholdMinutes] = useState(60);
+  const staleThresholdMinutes = 60;
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
-  const [flowVersion, setFlowVersion] = useState(0);
+  const flowVersion = 0;
   const [routeAnalysisRunId, setRouteAnalysisRunId] = useState(0);
   const [routeAnalysisStartedAt, setRouteAnalysisStartedAt] = useState<number | null>(null);
   const [routeStatusTick, setRouteStatusTick] = useState(() => Date.now());
@@ -90,8 +88,7 @@ export default function HomePage() {
     setError,
     analysisRunMs,
     loadWeather,
-    setAnalysisRunMs,
-    resetWeatherState
+    setAnalysisRunMs
   } = weatherForecast;
   const clearWeatherErrorOnPlaceSearch = useCallback(() => {
     setError(null);
@@ -130,8 +127,7 @@ export default function HomePage() {
     setSelectedRouteStart,
     searchError,
     setSearchError,
-    setResults,
-    resetGeocodeState
+    setResults
   } = geocode;
   const {
     routeAnalysis,
@@ -139,8 +135,7 @@ export default function HomePage() {
     routeLoading,
     routeError,
     setRouteError,
-    analyzeRoutes,
-    resetRouteAnalysisState
+    analyzeRoutes
   } = routeAnalysisState;
 
   const routeProgressSteps = [
@@ -239,27 +234,6 @@ export default function HomePage() {
     }, 120);
   }
 
-  function activateTabAndScroll(
-    tab: "forecast" | "routes",
-    ref: { current: HTMLElement | HTMLDivElement | null }
-  ): void {
-    if (activeTab === tab) {
-      scrollToSection(ref);
-      return;
-    }
-
-    setActiveTab(tab);
-    scrollToSection(ref);
-  }
-
-  function resetFlow(): void {
-    setFlowVersion((previous) => previous + 1);
-    resetGeocodeState();
-    resetWeatherState();
-    resetRouteAnalysisState();
-    setActiveTab("forecast");
-  }
-
   function searchPlace(event: FormEvent): void {
     event.preventDefault();
   }
@@ -281,6 +255,8 @@ export default function HomePage() {
       setShowOnboarding(false);
       persistOnboardingDismissed();
     }
+
+    void loadWeatherForPlace(place, { focusForecastSection: true });
   }
 
   const loadWeatherForPlace = useCallback(
@@ -409,44 +385,6 @@ export default function HomePage() {
     () => (activeTab === "routes" ? selectedRouteStart || selected : selected),
     [activeTab, selected, selectedRouteStart]
   );
-
-  const compactBestWindow = useMemo(() => {
-    if (routeAnalysis) {
-      return routeAnalysis.bestWindowNext24h || routeAnalysis.bestWindowNext7d;
-    }
-
-    return visibleBestWindow24h || visibleBestWindow7d;
-  }, [routeAnalysis, visibleBestWindow24h, visibleBestWindow7d]);
-
-  const compactScoreHour = useMemo(() => {
-    if (routeAnalysis?.hours.length) {
-      return getCurrentOrNextHour(routeAnalysis.hours, staleCheckTick);
-    }
-
-    if (!weather) {
-      return null;
-    }
-
-    return getCurrentOrNextHour(weather.hours, staleCheckTick);
-  }, [routeAnalysis, staleCheckTick, weather]);
-
-  const compactSelectionLabel = useMemo(() => {
-    if (routeAnalysis) {
-      return `${routeAnalysis.route.startLabel} → ${routeAnalysis.route.endLabel}`;
-    }
-
-    if (selected?.name) {
-      return selected.name;
-    }
-
-    if (weather?.locationLabel) {
-      return weather.locationLabel;
-    }
-
-    return null;
-  }, [routeAnalysis, selected, weather]);
-
-  const shouldShowCompactPanel = Boolean(weather || routeAnalysis);
 
   const onMarkerMoved = useCallback(
     async (lat: number, lon: number): Promise<void> => {
@@ -599,85 +537,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="rs-surface p-4">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={resetFlow}
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-          >
-            Start på nytt
-          </button>
-        </div>
-      </section>
-
-      {shouldShowCompactPanel && (
-        <section className="rs-surface sticky top-3 z-20 p-4">
-          <div className="grid gap-4 md:grid-cols-[1.1fr_1fr_auto] md:items-center">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Valgt sted/rute</p>
-              <p className="mt-1 text-sm font-medium text-slate-100">
-                {compactSelectionLabel || "Ikke valgt"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Beste vindu</p>
-              <p className="mt-1 text-sm font-medium text-slate-100">
-                {compactBestWindow
-                  ? `${formatOsloDateTime(compactBestWindow.startTime)}–${formatOsloDateTime(compactBestWindow.endTime)}`
-                  : "Ikke tilgjengelig ennå"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Score-status nå</p>
-              <div className="mt-1">
-                {compactScoreHour ? (
-                  <ScoreBadge label={compactScoreHour.scoreLabel} score={compactScoreHour.score} />
-                ) : (
-                  <span className="text-sm text-slate-400">Ingen score ennå</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("forecast", locationSectionRef)}
-            >
-              Til stedvalg
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("forecast", weatherSectionRef)}
-            >
-              Til vær
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-              onClick={() => activateTabAndScroll("routes", routeSectionRef)}
-            >
-              Til ruteanalyse
-            </button>
-            {mapAnchor ? (
-              <button
-                type="button"
-                className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
-                onClick={() => activateTabAndScroll("routes", mapSectionRef)}
-              >
-                Til kart
-              </button>
-            ) : null}
-          </div>
-        </section>
-      )}
-
       {activeTab === "forecast" && (
       <div className="rs-section-shell">
       <section ref={locationSectionRef} className="rs-surface p-6">
-        <h2 className="text-lg font-semibold text-slate-100">Seksjon 1 · Velg område</h2>
+        <h2 className="text-lg font-semibold text-slate-100">Velg område</h2>
         <p className="mt-1 text-sm text-slate-400">
           Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
         </p>
@@ -731,7 +594,6 @@ export default function HomePage() {
             className="mt-3 inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-60"
             onClick={() => {
               chooseArea(osloQuickCity);
-              void loadWeatherForPlace(osloQuickCity, { focusForecastSection: true });
             }}
             disabled={weatherLoading || addressLoading || placeLoading}
           >
@@ -748,7 +610,6 @@ export default function HomePage() {
                 className="rounded-md border border-slate-600 bg-slate-800 px-2 py-2 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-60"
                 onClick={() => {
                   chooseArea(city);
-                  void loadWeatherForPlace(city, { focusForecastSection: true });
                 }}
                 disabled={weatherLoading || addressLoading || placeLoading}
               >
@@ -769,7 +630,6 @@ export default function HomePage() {
                   className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-600"
                   onClick={() => {
                     chooseArea(place);
-                    void loadWeatherForPlace(place, { focusForecastSection: true });
                   }}
                 >
                   {place.name}
@@ -818,7 +678,7 @@ export default function HomePage() {
       {weather && activeTab === "forecast" && (
         <section ref={weatherSectionRef} className="rs-section-shell space-y-6">
           <div className="rs-surface p-4">
-            <h2 className="text-lg font-semibold text-slate-100">Seksjon 2 · Vær og tidspunkt</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Vær og tidspunkt</h2>
             <p className="mt-1 text-sm text-slate-300">Sted: {selected?.name || weather.locationLabel}</p>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
@@ -882,24 +742,6 @@ export default function HomePage() {
                   Sist oppdatert værdata: {formatOsloDateTime(updatedWeatherAt)}
                 </p>
               ) : null}
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <span>Gammel data etter</span>
-                <select
-                  className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                  value={staleThresholdMinutes}
-                  onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
-                >
-                  <option value={30}>30 min</option>
-                  <option value={60}>60 min</option>
-                  <option value={120}>120 min</option>
-                </select>
-              </label>
-              <span
-                className="cursor-help text-xs text-slate-400"
-                title="Gammel data betyr at siste oppdatering er eldre enn valgt terskel. Da kan vær og ruteforhold ha endret seg, og du bør oppdatere før du sykler."
-              >
-                Hva betyr gammel data?
-              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -962,7 +804,7 @@ export default function HomePage() {
               step1Completed ? "" : "pointer-events-none opacity-45"
             }`}
           >
-            <h2 className="text-lg font-semibold text-slate-100">Seksjon 3 · Ruteanalyse</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
               Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
               sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
@@ -1165,24 +1007,6 @@ export default function HomePage() {
                 Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
               </p>
               <div className="-mt-2 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <span>Gammel data etter</span>
-                  <select
-                    className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                    value={staleThresholdMinutes}
-                    onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
-                  >
-                    <option value={30}>30 min</option>
-                    <option value={60}>60 min</option>
-                    <option value={120}>120 min</option>
-                  </select>
-                </label>
-                <span
-                  className="cursor-help text-xs text-slate-400"
-                  title="Gammel data betyr at siste analyse er eldre enn valgt terskel. Da kan vind, nedbør eller trafikkforhold ha endret seg siden analysen ble kjørt."
-                >
-                  Hva betyr gammel data?
-                </span>
               </div>
               <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -1242,7 +1066,7 @@ export default function HomePage() {
 
       {mapAnchor && (
         <section ref={mapSectionRef} className="rs-section-shell space-y-3">
-          <h2 className="px-2 text-lg font-semibold text-slate-100">Seksjon 4 · Kart</h2>
+          <h2 className="px-2 text-lg font-semibold text-slate-100">Kart</h2>
           <LocationMap
             lat={mapAnchor.lat}
             lon={mapAnchor.lon}

@@ -1,8 +1,6 @@
 import { ScoredWeatherHour } from "@/lib/types";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import { WeatherConditionBadge } from "@/components/WeatherConditionBadge";
-import { WeatherLegend } from "@/components/WeatherLegend";
-import { getWeatherConditionVisual } from "@/lib/weather-condition";
+import { WeatherSymbolBadge } from "@/components/WeatherSymbolBadge";
 
 import { formatOsloDayAndTime } from "@/lib/time-format";
 
@@ -61,17 +59,6 @@ function formatWindDescription(windSpeed: number, direction?: number): string {
   return `Sterk vind fra ${directionText}`;
 }
 
-function formatSymbol(symbolCode?: string): string {
-  if (!symbolCode) {
-    return "-";
-  }
-
-  return symbolCode
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function getWindGustWarning(windGust?: number): string | null {
   if (windGust === undefined) {
     return null;
@@ -114,10 +101,8 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
 
   return (
     <div className="space-y-4">
-      <WeatherLegend />
       <div className="grid gap-3 lg:hidden">
         {hours.map((hour) => {
-          const conditionVisual = getWeatherConditionVisual(hour);
           const windGustWarning = getWindGustWarning(hour.windGust);
           const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
 
@@ -195,9 +180,9 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                     <dd className="text-right">{formatWindDescription(hour.windSpeed, hour.windFromDirection)}</dd>
                   </div>
                   <div className="flex items-start justify-between gap-4">
-                    <dt>Symbol</dt>
-                    <dd className="text-right" title={formatSymbol(hour.symbolCode)}>
-                      <WeatherConditionBadge visual={conditionVisual} compact />
+                    <dt>Vær</dt>
+                    <dd className="text-right">
+                      <WeatherSymbolBadge symbolCode={hour.symbolCode} compact />
                     </dd>
                   </div>
                   {showTailwindColumn ? (
@@ -225,7 +210,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
               <th className="px-4 py-3">Temp</th>
               <th className="px-4 py-3">Nedbør</th>
               <th className="px-4 py-3">Skydekke</th>
-              <th className="px-4 py-3">Kategori</th>
+              <th className="px-4 py-3">Vær</th>
               <th className="px-4 py-3">Vind</th>
               <th className="px-4 py-3">Vindkast</th>
               <th className="px-4 py-3">Vindretning</th>
@@ -235,7 +220,6 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
           </thead>
           <tbody>
             {hours.map((hour) => {
-              const conditionVisual = getWeatherConditionVisual(hour);
               const windGustWarning = getWindGustWarning(hour.windGust);
               const { hasHighWind, hasHighPrecipitation, hasDangerousWindGust } = getRiskHighlight(hour);
               const hasAnyRisk = hasHighWind || hasHighPrecipitation || hasDangerousWindGust;
@@ -258,7 +242,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                   </td>
                   <td className="px-4 py-3">{hour.cloudCoverPercent.toFixed(0)} %</td>
                   <td className="px-4 py-3">
-                    <WeatherConditionBadge visual={conditionVisual} compact />
+                    <WeatherSymbolBadge symbolCode={hour.symbolCode} compact />
                   </td>
                   <td
                     className={`px-4 py-3 ${
