@@ -8,6 +8,7 @@ interface ApiError {
 interface UseGeocodeSearchParams {
   activeTab: "forecast" | "routes";
   flowVersion: number;
+  onPlaceSearchStart?: () => void;
 }
 
 const PLACE_SEARCH_DEBOUNCE_MS = 180;
@@ -26,7 +27,11 @@ export function isSameAreaQuery(query: string, place: GeocodeResult | null): boo
   return query.trim() === getAreaContextLabel(place);
 }
 
-export function useGeocodeSearch({ activeTab, flowVersion }: UseGeocodeSearchParams) {
+export function useGeocodeSearch({
+  activeTab,
+  flowVersion,
+  onPlaceSearchStart
+}: UseGeocodeSearchParams) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [placeLoading, setPlaceLoading] = useState(false);
@@ -73,6 +78,8 @@ export function useGeocodeSearch({ activeTab, flowVersion }: UseGeocodeSearchPar
       setPlaceLoading(false);
       return;
     }
+
+    onPlaceSearchStart?.();
 
     let active = true;
     const cacheKey = trimmedQuery.toLocaleLowerCase("nb-NO");
@@ -141,7 +148,7 @@ export function useGeocodeSearch({ activeTab, flowVersion }: UseGeocodeSearchPar
       window.clearTimeout(timeoutId);
       setPlaceLoading(false);
     };
-  }, [deferredQuery, flowVersion, selectedArea]);
+  }, [deferredQuery, flowVersion, onPlaceSearchStart, selectedArea]);
 
   useEffect(() => {
     const scopedVersion = flowVersion;

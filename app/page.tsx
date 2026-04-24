@@ -157,8 +157,16 @@ export default function HomePage() {
   const prevStep2Ref = useRef(false);
   const prevStep3Ref = useRef(false);
   const onboardingDismissedFallbackRef = useRef(false);
-  const geocode = useGeocodeSearch({ activeTab, flowVersion });
   const weatherForecast = useWeatherForecast(flowVersion);
+  const clearWeatherErrorOnPlaceSearch = useCallback(() => {
+    weatherForecast.setError(null);
+  }, [weatherForecast]);
+
+  const geocode = useGeocodeSearch({
+    activeTab,
+    flowVersion,
+    onPlaceSearchStart: clearWeatherErrorOnPlaceSearch
+  });
   const routeAnalysisState = useRouteAnalysis(flowVersion);
   const {
     query,
