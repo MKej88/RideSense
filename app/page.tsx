@@ -61,7 +61,7 @@ const QUICK_CITIES: GeocodeResult[] = [
 
 export default function HomePage() {
   const [staleCheckTick, setStaleCheckTick] = useState(() => Date.now());
-  const [staleThresholdMinutes, setStaleThresholdMinutes] = useState(60);
+  const staleThresholdMinutes = 60;
   const [activeTab, setActiveTab] = useState<"forecast" | "routes">("forecast");
   const [forecastRange, setForecastRange] = useState<"24h" | "7d">("24h");
   const [selectedForecastDay, setSelectedForecastDay] = useState<string | null>(null);
@@ -677,7 +677,7 @@ export default function HomePage() {
       {activeTab === "forecast" && (
       <div className="rs-section-shell">
       <section ref={locationSectionRef} className="rs-surface p-6">
-        <h2 className="text-lg font-semibold text-slate-100">Seksjon 1 · Velg område</h2>
+        <h2 className="text-lg font-semibold text-slate-100">Velg område</h2>
         <p className="mt-1 text-sm text-slate-400">
           Scoren er et tall fra 0 til 100 som viser hvor bra sykkelforholdene er for timen.
         </p>
@@ -818,7 +818,7 @@ export default function HomePage() {
       {weather && activeTab === "forecast" && (
         <section ref={weatherSectionRef} className="rs-section-shell space-y-6">
           <div className="rs-surface p-4">
-            <h2 className="text-lg font-semibold text-slate-100">Seksjon 2 · Vær og tidspunkt</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Vær og tidspunkt</h2>
             <p className="mt-1 text-sm text-slate-300">Sted: {selected?.name || weather.locationLabel}</p>
             <div className="mt-3 inline-flex rounded-lg bg-slate-800 p-1">
               <button
@@ -882,24 +882,6 @@ export default function HomePage() {
                   Sist oppdatert værdata: {formatOsloDateTime(updatedWeatherAt)}
                 </p>
               ) : null}
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <span>Gammel data etter</span>
-                <select
-                  className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                  value={staleThresholdMinutes}
-                  onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
-                >
-                  <option value={30}>30 min</option>
-                  <option value={60}>60 min</option>
-                  <option value={120}>120 min</option>
-                </select>
-              </label>
-              <span
-                className="cursor-help text-xs text-slate-400"
-                title="Gammel data betyr at siste oppdatering er eldre enn valgt terskel. Da kan vær og ruteforhold ha endret seg, og du bør oppdatere før du sykler."
-              >
-                Hva betyr gammel data?
-              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -962,7 +944,7 @@ export default function HomePage() {
               step1Completed ? "" : "pointer-events-none opacity-45"
             }`}
           >
-            <h2 className="text-lg font-semibold text-slate-100">Seksjon 3 · Ruteanalyse</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Ruteanalyse</h2>
             <p className="mt-1 text-sm text-slate-400">
               Legg inn start og stopp. Vi bruker veirute (ikke luftlinje), bygger tur/retur,
               sampler fem punkter og beregner beste tidspunkt med ekstra vekt på medvind.
@@ -1165,24 +1147,6 @@ export default function HomePage() {
                 Sist oppdatert ruteanalyse: {formatOsloDateTime(routeAnalysis.analyzedAt)}
               </p>
               <div className="-mt-2 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <span>Gammel data etter</span>
-                  <select
-                    className="rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                    value={staleThresholdMinutes}
-                    onChange={(event) => setStaleThresholdMinutes(Number(event.target.value))}
-                  >
-                    <option value={30}>30 min</option>
-                    <option value={60}>60 min</option>
-                    <option value={120}>120 min</option>
-                  </select>
-                </label>
-                <span
-                  className="cursor-help text-xs text-slate-400"
-                  title="Gammel data betyr at siste analyse er eldre enn valgt terskel. Da kan vind, nedbør eller trafikkforhold ha endret seg siden analysen ble kjørt."
-                >
-                  Hva betyr gammel data?
-                </span>
               </div>
               <p className="-mt-2 text-xs text-slate-500">Tid vises i norsk tid (Europe/Oslo).</p>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -1242,7 +1206,7 @@ export default function HomePage() {
 
       {mapAnchor && (
         <section ref={mapSectionRef} className="rs-section-shell space-y-3">
-          <h2 className="px-2 text-lg font-semibold text-slate-100">Seksjon 4 · Kart</h2>
+          <h2 className="px-2 text-lg font-semibold text-slate-100">Kart</h2>
           <LocationMap
             lat={mapAnchor.lat}
             lon={mapAnchor.lon}

@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import { WeatherConditionBadge } from "@/components/WeatherConditionBadge";
-import { WeatherLegend } from "@/components/WeatherLegend";
+import { WeatherSymbolBadge } from "@/components/WeatherSymbolBadge";
 import { RouteAnalysisResponse } from "@/lib/types";
 import { formatOsloDateTime, formatOsloTime, isOlderThanMinutes } from "@/lib/time-format";
-import { WeatherConditionKey, getWeatherConditionVisual } from "@/lib/weather-condition";
 
 interface RouteAnalysisPanelProps {
   data: RouteAnalysisResponse | null;
@@ -14,20 +12,6 @@ interface RouteAnalysisPanelProps {
   onSelectRoute: (routeId: string) => void;
   onRefresh: () => void;
 }
-
-const ROUTE_BADGE_SEVERITY: Record<WeatherConditionKey, number> = {
-  sol: 0,
-  vind: 1,
-  regn: 2,
-  fare: 3
-};
-
-const DEFAULT_ROUTE_BADGE_VISUAL = getWeatherConditionVisual({
-  symbolCode: undefined,
-  windSpeed: 0,
-  windGust: undefined,
-  precipitationAmount: 0
-});
 
 export function RouteAnalysisPanel({
   data,
@@ -92,7 +76,6 @@ export function RouteAnalysisPanel({
 
       {data && !loading && !error && (
         <div className="mt-6 space-y-6">
-          <WeatherLegend />
           {data.bestRouteExplanation && (
             <div className="rounded-xl border border-emerald-400/45 bg-emerald-900/25 p-4">
               <p className="text-sm font-medium text-emerald-200">Beste rute akkurat nå</p>
@@ -103,14 +86,9 @@ export function RouteAnalysisPanel({
           <div className="grid gap-3 lg:grid-cols-3">
             {data.routes.map((routeAnalysis) => {
               const selected = routeAnalysis.route.id === selectedRouteId;
-              const sampledPointVisuals = routeAnalysis.sampledPoints.map((sampledPoint) =>
-                getWeatherConditionVisual(sampledPoint.weather)
-              );
-              const categoryVisual = sampledPointVisuals.reduce((currentWorst, nextVisual) => {
-                return ROUTE_BADGE_SEVERITY[nextVisual.key] > ROUTE_BADGE_SEVERITY[currentWorst.key]
-                  ? nextVisual
-                  : currentWorst;
-              }, DEFAULT_ROUTE_BADGE_VISUAL);
+              const representativePoint = routeAnalysis.sampledPoints.reduce((current, next) => {
+                return next.weather.score < current.weather.score ? next : current;
+              }, routeAnalysis.sampledPoints[0]);
 
               return (
                 <button
@@ -126,7 +104,10 @@ export function RouteAnalysisPanel({
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-lg font-semibold">{routeAnalysis.route.shortName}</p>
                     <div className="flex items-center gap-2">
-                      <WeatherConditionBadge visual={categoryVisual} compact />
+                      <WeatherSymbolBadge
+                        symbolCode={representativePoint?.weather.symbolCode}
+                        compact
+                      />
                       <ScoreBadge
                         label={routeAnalysis.summary.scoreLabel}
                         score={routeAnalysis.summary.score}
@@ -149,7 +130,9 @@ export function RouteAnalysisPanel({
               <div className="rs-surface-strong p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-100">{selectedRoute.route.shortName}</h3>
+                    <h3 className="text-xl font-semibold text-slate-100">
+                      {selectedRoute.route.shortName}
+                    </h3>
                     <p className="mt-2 text-sm text-slate-400">{selectedRoute.summary.explanation}</p>
                   </div>
                   <ScoreBadge
@@ -161,36 +144,26 @@ export function RouteAnalysisPanel({
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">Startplass</p>
-                    <p className="rs-card-metric">
-                      {selectedRoute.route.startLabel}
-                    </p>
+                    <p className="rs-card-metric">{selectedRoute.route.startLabel}</p>
                   </div>
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">Sluttplass</p>
-                    <p className="rs-card-metric">
-                      {selectedRoute.route.endLabel}
-                    </p>
+                    <p className="rs-card-metric">{selectedRoute.route.endLabel}</p>
                   </div>
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">Lengde</p>
-                    <p className="rs-card-metric">
-                      {selectedRoute.route.distanceKm} km
-                    </p>
+                    <p className="rs-card-metric">{selectedRoute.route.distanceKm} km</p>
                   </div>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">En vei</p>
-                    <p className="rs-card-metric">
-                      {selectedRoute.route.oneWayDistanceKm} km
-                    </p>
+                    <p className="rs-card-metric">{selectedRoute.route.oneWayDistanceKm} km</p>
                   </div>
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">Snitt vind</p>
-                    <p className="rs-card-metric">
-                      {selectedRoute.summary.averageWindSpeed} m/s
-                    </p>
+                    <p className="rs-card-metric">{selectedRoute.summary.averageWindSpeed} m/s</p>
                   </div>
                   <div className="rs-surface-subtle rs-card-layout p-3">
                     <p className="rs-card-title">Snitt nedbør</p>
@@ -213,7 +186,7 @@ export function RouteAnalysisPanel({
                       <tr>
                         <th className="pb-2 pr-4">Punkt</th>
                         <th className="pb-2 pr-4">Tid</th>
-                        <th className="pb-2 pr-4">Kategori</th>
+                        <th className="pb-2 pr-4">Vær</th>
                         <th className="pb-2 pr-4">Vind</th>
                         <th className="pb-2 pr-4">Nedbør</th>
                         <th className="pb-2">Score</th>
@@ -221,16 +194,16 @@ export function RouteAnalysisPanel({
                     </thead>
                     <tbody>
                       {selectedRoute.sampledPoints.map((point) => (
-                        <tr key={`${selectedRoute.route.id}-${point.sample.index}`} className="border-t border-slate-800">
-                          <td className="py-3 pr-4 font-medium text-slate-200">
-                            {point.sample.label}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-400">{formatOsloTime(point.weather.time)}</td>
+                        <tr
+                          key={`${selectedRoute.route.id}-${point.sample.index}`}
+                          className="border-t border-slate-800"
+                        >
+                          <td className="py-3 pr-4 font-medium text-slate-200">{point.sample.label}</td>
                           <td className="py-3 pr-4 text-slate-400">
-                            <WeatherConditionBadge
-                              visual={getWeatherConditionVisual(point.weather)}
-                              compact
-                            />
+                            {formatOsloTime(point.weather.time)}
+                          </td>
+                          <td className="py-3 pr-4 text-slate-400">
+                            <WeatherSymbolBadge symbolCode={point.weather.symbolCode} compact />
                           </td>
                           <td className="py-3 pr-4 text-slate-400">
                             {point.weather.windSpeed.toFixed(1)} m/s
