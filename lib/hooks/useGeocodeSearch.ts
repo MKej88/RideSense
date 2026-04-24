@@ -313,6 +313,7 @@ export function useGeocodeSearch({ activeTab, flowVersion }: UseGeocodeSearchPar
   }, []);
 
   function resetGeocodeState(): void {
+    flowVersionRef.current += 1;
     placeAbortRef.current?.abort();
     addressAbortRef.current?.abort();
     stopAbortRef.current?.abort();

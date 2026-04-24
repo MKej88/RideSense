@@ -71,6 +71,7 @@ export function useWeatherForecast(flowVersion: number) {
   }, []);
 
   function resetWeatherState(): void {
+    flowVersionRef.current += 1;
     weatherAbortRef.current?.abort();
     setSelected(null);
     setWeather(null);

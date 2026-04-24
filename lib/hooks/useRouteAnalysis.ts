@@ -71,6 +71,7 @@ export function useRouteAnalysis(flowVersion: number) {
   }, []);
 
   function resetRouteAnalysisState(): void {
+    flowVersionRef.current += 1;
     routeAbortRef.current?.abort();
     setRouteAnalysis(null);
     setRouteLoading(false);
