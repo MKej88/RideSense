@@ -43,6 +43,8 @@ export function useWeatherForecast(flowVersion: number) {
         cachedEntry &&
         Date.now() - cachedEntry.cachedAtMs < WEATHER_CACHE_TTL_MS
       ) {
+        weatherAbortRef.current?.abort();
+        weatherAbortRef.current = null;
         setError(null);
         setSelected(place);
         setWeather(cachedEntry.payload);
