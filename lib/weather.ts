@@ -3,7 +3,7 @@ import { fetchNearestStationObservation } from "@/lib/station-observations";
 import { ScoredWeatherHour, WeatherHourRaw, WeatherResponse } from "@/lib/types";
 
 const MET_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete";
-const MET_FETCH_TIMEOUT_MS = 4000;
+const MET_FETCH_TIMEOUT_MS = 8000;
 const OBSERVATION_MAX_AGE_HOURS = 2;
 const FORECAST_HOURS = 24 * 7;
 
