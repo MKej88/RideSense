@@ -101,7 +101,6 @@ export async function fetchForecastForLocation(
   const url = `${MET_FORECAST_URL}?lat=${lat}&lon=${lon}`;
 
   let response: Response;
-  const observationPromise = fetchNearestStationObservation(lat, lon);
 
   try {
     response = await fetch(url, {
@@ -126,6 +125,7 @@ export async function fetchForecastForLocation(
     throw new Error("Uventet datastruktur fra værleverandør.");
   }
 
+  const observationPromise = fetchNearestStationObservation(lat, lon);
   const observation = await observationPromise;
   const hoursRaw: WeatherHourRaw[] = series.slice(0, FORECAST_HOURS).map((entry: any) => {
     const details = entry?.data?.instant?.details;
