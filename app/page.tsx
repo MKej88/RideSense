@@ -113,9 +113,9 @@ export default function HomePage() {
   }
 
   const loadWeatherForPlace = useCallback(
-    async (place: GeocodeResult): Promise<void> => {
+    async (place: GeocodeResult, options?: { forceRefresh?: boolean }): Promise<void> => {
       setResults([]);
-      await loadWeather(place);
+      await loadWeather(place, options);
       scrollToSection(weatherSectionRef);
     },
     [loadWeather, setResults]
@@ -440,7 +440,7 @@ export default function HomePage() {
                   if (!placeToRefresh) {
                     return;
                   }
-                  void loadWeatherForPlace(placeToRefresh);
+                  void loadWeatherForPlace(placeToRefresh, { forceRefresh: true });
                 }}
                 className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60"
                 disabled={weatherLoading || (!selected && !selectedArea)}

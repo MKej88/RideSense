@@ -107,7 +107,7 @@ export async function fetchForecastForLocation(
       headers: {
         "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
       },
-      cache: "no-store",
+      next: { revalidate: 120 },
       signal: AbortSignal.timeout(MET_FETCH_TIMEOUT_MS)
     });
   } catch {
@@ -125,7 +125,8 @@ export async function fetchForecastForLocation(
     throw new Error("Uventet datastruktur fra værleverandør.");
   }
 
-  const observation = await fetchNearestStationObservation(lat, lon);
+  const observationPromise = fetchNearestStationObservation(lat, lon);
+  const observation = await observationPromise;
   const hoursRaw: WeatherHourRaw[] = series.slice(0, FORECAST_HOURS).map((entry: any) => {
     const details = entry?.data?.instant?.details;
     const next1hDetails = entry?.data?.next_1_hours?.details;
