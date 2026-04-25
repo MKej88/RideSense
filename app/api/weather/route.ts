@@ -22,9 +22,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const weather = await fetchForecastForLocation(lat, lon, label);
+    const refreshRequested = request.nextUrl.searchParams.get("refresh") === "1";
+
     return NextResponse.json(weather, {
       headers: {
-        "Cache-Control": "no-store, max-age=0"
+        "Cache-Control": refreshRequested
+          ? "no-store, max-age=0"
+          : "public, s-maxage=120, stale-while-revalidate=300"
       }
     });
   } catch (error) {
