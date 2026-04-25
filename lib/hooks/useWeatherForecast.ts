@@ -28,6 +28,15 @@ export function useWeatherForecast(flowVersion: number) {
   const flowVersionRef = useRef(flowVersion);
   const weatherCacheRef = useRef(new Map<string, CachedWeatherEntry>());
 
+  function evictExpiredWeatherEntries(): void {
+    const nowMs = Date.now();
+    for (const [key, entry] of weatherCacheRef.current) {
+      if (nowMs - entry.cachedAtMs >= WEATHER_CACHE_TTL_MS) {
+        weatherCacheRef.current.delete(key);
+      }
+    }
+  }
+
   useEffect(() => {
     flowVersionRef.current = flowVersion;
   }, [flowVersion]);
@@ -36,6 +45,7 @@ export function useWeatherForecast(flowVersion: number) {
     async (place: GeocodeResult, options?: LoadWeatherOptions): Promise<WeatherResponse | null> => {
       const cacheKey = getCacheKey(place);
       const forceRefresh = options?.forceRefresh ?? false;
+      evictExpiredWeatherEntries();
       const cachedEntry = weatherCacheRef.current.get(cacheKey);
 
       if (
@@ -53,68 +63,70 @@ export function useWeatherForecast(flowVersion: number) {
         return cachedEntry.payload;
       }
 
-    const scopedVersion = flowVersionRef.current;
-    const controller = new AbortController();
-    weatherAbortRef.current?.abort();
-    weatherAbortRef.current = controller;
+      const scopedVersion = flowVersionRef.current;
+      const controller = new AbortController();
+      weatherAbortRef.current?.abort();
+      weatherAbortRef.current = controller;
 
-    setWeatherLoading(true);
-    setError(null);
-    setSelected(place);
-    setWeather(null);
-    setAnalysisRunMs(null);
-
-    try {
-      const requestUrl = new URL("/api/weather", window.location.origin);
-      requestUrl.searchParams.set("lat", String(place.lat));
-      requestUrl.searchParams.set("lon", String(place.lon));
-      requestUrl.searchParams.set("label", place.name);
-      if (forceRefresh) {
-        requestUrl.searchParams.set("refresh", "1");
-      }
-
-      const response = await fetch(
-        requestUrl.toString(),
-        {
-          signal: controller.signal
-        }
-      );
-      const payload = (await response.json()) as WeatherResponse;
-
-      if (!response.ok) {
-        throw new Error(getErrorMessageForUi(payload, "Klarte ikke å hente værdata."));
-      }
-
-      if (scopedVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
-        return null;
-      }
-
-      setAnalysisRunMs(Date.now());
-      setWeather(payload);
-      weatherCacheRef.current.set(cacheKey, {
-        payload,
-        cachedAtMs: Date.now()
-      });
-      return payload;
-    } catch (caughtError) {
-      if (caughtError instanceof Error && caughtError.name === "AbortError") {
-        return null;
-      }
-
-      if (scopedVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
-        return null;
-      }
-
-      setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
+      setWeatherLoading(true);
+      setError(null);
+      setSelected(place);
       setWeather(null);
       setAnalysisRunMs(null);
-      return null;
-    } finally {
-      if (weatherAbortRef.current === controller) {
-        weatherAbortRef.current = null;
-        setWeatherLoading(false);
+
+      try {
+        const requestUrl = new URL("/api/weather", window.location.origin);
+        requestUrl.searchParams.set("lat", String(place.lat));
+        requestUrl.searchParams.set("lon", String(place.lon));
+        requestUrl.searchParams.set("label", place.name);
+        if (forceRefresh) {
+          requestUrl.searchParams.set("refresh", "1");
+        }
+
+        const response = await fetch(
+          requestUrl.toString(),
+          {
+            signal: controller.signal
+          }
+        );
+        const payload = (await response.json()) as WeatherResponse;
+
+        if (!response.ok) {
+          throw new Error(getErrorMessageForUi(payload, "Klarte ikke å hente værdata."));
+        }
+
+        if (scopedVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
+          return null;
+        }
+
+        const nowMs = Date.now();
+        setAnalysisRunMs(nowMs);
+        setWeather(payload);
+        evictExpiredWeatherEntries();
+        weatherCacheRef.current.set(cacheKey, {
+          payload,
+          cachedAtMs: nowMs
+        });
+        return payload;
+      } catch (caughtError) {
+        if (caughtError instanceof Error && caughtError.name === "AbortError") {
+          return null;
+        }
+
+        if (scopedVersion !== flowVersionRef.current || weatherAbortRef.current !== controller) {
+          return null;
+        }
+
+        setError(caughtError instanceof Error ? caughtError.message : "Ukjent feil ved værhenting.");
+        setWeather(null);
+        setAnalysisRunMs(null);
+        return null;
+      } finally {
+        if (weatherAbortRef.current === controller) {
+          weatherAbortRef.current = null;
+          setWeatherLoading(false);
+        }
       }
-    }
     },
     []
   );
