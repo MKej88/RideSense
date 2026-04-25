@@ -96,7 +96,8 @@ function shouldUseObservation(hourTime: string, observedAt: string): boolean {
 export async function fetchForecastForLocation(
   lat: number,
   lon: number,
-  locationLabel: string
+  locationLabel: string,
+  forceRefresh = false
 ): Promise<WeatherResponse> {
   const url = `${MET_FORECAST_URL}?lat=${lat}&lon=${lon}`;
 
@@ -107,7 +108,7 @@ export async function fetchForecastForLocation(
       headers: {
         "User-Agent": process.env.MET_USER_AGENT || "RideSense/1.0 ridesense@example.com"
       },
-      next: { revalidate: 120 },
+      ...(forceRefresh ? { cache: "no-store" as const } : { next: { revalidate: 120 } }),
       signal: AbortSignal.timeout(MET_FETCH_TIMEOUT_MS)
     });
   } catch {
