@@ -130,7 +130,7 @@ export default function HomePage() {
     setSearchError(null);
     setResults([]);
 
-    void loadWeatherForPlace(place);
+    void loadWeatherForPlace(place, { forceRefresh: true });
   }
 
   function searchPlace(event: FormEvent): void {
@@ -238,7 +238,7 @@ export default function HomePage() {
 
       setSelectedArea(movedPlace);
       setQuery(getAreaContextLabel(movedPlace));
-      await loadWeatherForPlace(movedPlace);
+      await loadWeatherForPlace(movedPlace, { forceRefresh: true });
     },
     [loadWeatherForPlace, setQuery, setSelectedArea]
   );

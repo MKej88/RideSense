@@ -20,9 +20,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const refreshRequested = request.nextUrl.searchParams.get("refresh") === "1";
+
   try {
-    const weather = await fetchForecastForLocation(lat, lon, label);
-    const refreshRequested = request.nextUrl.searchParams.get("refresh") === "1";
+    const weather = await fetchForecastForLocation(lat, lon, label, refreshRequested);
 
     return NextResponse.json(weather, {
       headers: {
