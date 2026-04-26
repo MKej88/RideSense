@@ -33,3 +33,26 @@ jobs:
 
       - name: Pytest
         run: pytest -q
+
+  typescript:
+    name: TypeScript-sjekker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hent kode
+        uses: actions/checkout@v4
+
+      - name: Sett opp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Installer npm-pakker
+        run: npm ci
+
+      - name: ESLint (Next.js)
+        run: npm run lint
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
