@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 BASE_URL = (
     "https://raw.githubusercontent.com/metno/weathericons/main/weather/svg/{code}.svg"
 )
 USER_AGENT = "RideSense/1.0 ridesense@example.com"
 OUTPUT_DIR = Path("public/weather-symbols")
+DEFAULT_WORKERS = 8
 
 SYMBOL_CODES = [
     "clearsky_day",
@@ -93,26 +97,59 @@ SYMBOL_CODES = [
 ]
 
 
-def download_symbol(symbol_code: str) -> bool:
-    target_path = OUTPUT_DIR / f"{symbol_code}.svg"
-    try:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return False
-
+def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | None:
     request = Request(
         BASE_URL.format(code=symbol_code),
         headers={"User-Agent": USER_AGENT},
     )
 
     try:
-        with urlopen(request, timeout=15) as response:
+        with urlopen(request, timeout=timeout_seconds) as response:
             svg_bytes = response.read()
     except (HTTPError, URLError):
-        return False
+        return None
 
     if not svg_bytes.strip():
+        return None
+
+    return svg_bytes
+
+
+def _is_valid_cached_svg(target_path: Path) -> bool:
+    try:
+        if not target_path.is_file() or target_path.stat().st_size <= 0:
+            return False
+
+        root = ElementTree.parse(target_path).getroot()
+    except (OSError, ElementTree.ParseError):
         return False
+
+    return root.tag.endswith("svg")
+
+
+def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
+    target_path = OUTPUT_DIR / f"{symbol_code}.svg"
+
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+
+    if not overwrite and target_path.exists() and _is_valid_cached_svg(target_path):
+        return True
+
+    svg_bytes = _fetch_svg_bytes(symbol_code)
+    if svg_bytes is None:
+        return False
+
+    if target_path.exists():
+        try:
+            if target_path.is_dir():
+                target_path.rmdir()
+            else:
+                target_path.unlink()
+        except OSError:
+            return False
 
     try:
         target_path.write_bytes(svg_bytes)
@@ -122,20 +159,40 @@ def download_symbol(symbol_code: str) -> bool:
     return True
 
 
-def main() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def _download_and_report(symbol_code: str, overwrite: bool = False) -> bool:
+    success = download_symbol(symbol_code, overwrite=overwrite)
+    if success:
+        print(f"OK  {symbol_code}")
+    else:
+        print(f"FEIL {symbol_code}")
+    return success
 
+
+def download_all_symbols(
+    symbol_codes: list[str] | tuple[str, ...],
+    workers: int = DEFAULT_WORKERS,
+    overwrite: bool = False,
+) -> tuple[int, int]:
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return 0, len(symbol_codes)
+
+    worker_count = max(1, workers)
     ok_count = 0
-    fail_count = 0
 
-    for code in SYMBOL_CODES:
-        if download_symbol(code):
-            ok_count += 1
-            print(f"OK  {code}")
-        else:
-            fail_count += 1
-            print(f"FEIL {code}")
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        download_fn = partial(_download_and_report, overwrite=overwrite)
+        for was_ok in executor.map(download_fn, symbol_codes):
+            if was_ok:
+                ok_count += 1
 
+    fail_count = len(symbol_codes) - ok_count
+    return ok_count, fail_count
+
+
+def main() -> None:
+    ok_count, fail_count = download_all_symbols(SYMBOL_CODES)
     print(f"\nFerdig. Lastet ned: {ok_count}, feilet: {fail_count}")
 
 
