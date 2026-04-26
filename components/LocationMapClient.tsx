@@ -23,7 +23,14 @@ export function LocationMapClient({
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
   const iconRef = useRef<DivIcon | null>(null);
+  const onMarkerMovedRef = useRef(onMarkerMoved);
+  const initialPositionRef = useRef<[number, number]>([lat, lon]);
+  const initialLabelRef = useRef(label);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onMarkerMovedRef.current = onMarkerMoved;
+  }, [onMarkerMoved]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -49,16 +56,19 @@ export function LocationMapClient({
         });
       }
 
-      const marker = L.marker([lat, lon], { draggable: true, icon: iconRef.current });
+      const marker = L.marker(initialPositionRef.current, {
+        draggable: true,
+        icon: iconRef.current
+      });
       marker.addTo(map);
-      marker.bindPopup(label).openPopup();
+      marker.bindPopup(initialLabelRef.current).openPopup();
       marker.on("dragend", () => {
         const nextPosition = marker.getLatLng();
-        onMarkerMoved(nextPosition.lat, nextPosition.lng);
+        onMarkerMovedRef.current(nextPosition.lat, nextPosition.lng);
       });
       markerRef.current = marker;
 
-      map.setView([lat, lon], 12);
+      map.setView(initialPositionRef.current, 12);
       setLoadError(null);
     } catch {
       setLoadError(
@@ -71,7 +81,7 @@ export function LocationMapClient({
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [lat, lon, label, onMarkerMoved]);
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || !markerRef.current) {
