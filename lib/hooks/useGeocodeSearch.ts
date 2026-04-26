@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getErrorMessageForUi } from "@/lib/api-error";
 import { GeocodeResult } from "@/lib/types";
 
@@ -29,21 +29,37 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const placeCacheRef = useRef(new Map<string, GeocodeResult[]>());
-  const deferredQuery = useDeferredValue(query);
   const placeAbortRef = useRef<AbortController | null>(null);
+  const firstResultMeasureRef = useRef<{ queryKey: string; startedAt: number } | null>(null);
 
   useEffect(() => {
-    const trimmedQuery = deferredQuery.trim();
+    const trimmedQuery = query.trim();
+    const finalizeFirstResultMeasure = (queryKey: string) => {
+      const measurement = firstResultMeasureRef.current;
+      if (!measurement || measurement.queryKey !== queryKey) {
+        return;
+      }
+
+      const elapsedMs = Math.round(performance.now() - measurement.startedAt);
+      console.info("[geocode] Time to first result:", {
+        strategy: "setTimeout-debounce",
+        queryKey,
+        elapsedMs
+      });
+      firstResultMeasureRef.current = null;
+    };
 
     if (isSameAreaQuery(trimmedQuery, selectedArea)) {
       setPlaceLoading(false);
       setSearchError(null);
+      firstResultMeasureRef.current = null;
       return;
     }
 
     if (trimmedQuery.length < 2) {
       setResults([]);
       setPlaceLoading(false);
+      firstResultMeasureRef.current = null;
       return;
     }
 
@@ -54,6 +70,10 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
     const controller = new AbortController();
     placeAbortRef.current?.abort();
     placeAbortRef.current = controller;
+    firstResultMeasureRef.current = {
+      queryKey: cacheKey,
+      startedAt: performance.now()
+    };
 
     const timeoutId = window.setTimeout(async () => {
       if (placeAbortRef.current !== controller) {
@@ -65,6 +85,7 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
         setResults(cachedResults);
         setPlaceLoading(false);
         setSearchError(null);
+        finalizeFirstResultMeasure(cacheKey);
         return;
       }
 
@@ -88,6 +109,7 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
         const nextResults = payload.results || [];
         placeCacheRef.current.set(cacheKey, nextResults);
         setResults(nextResults);
+        finalizeFirstResultMeasure(cacheKey);
       } catch (caughtError) {
         if (!active || placeAbortRef.current !== controller) {
           return;
@@ -116,7 +138,7 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
       window.clearTimeout(timeoutId);
       setPlaceLoading(false);
     };
-  }, [deferredQuery, onPlaceSearchStart, selectedArea]);
+  }, [onPlaceSearchStart, query, selectedArea]);
 
   useEffect(() => {
     return () => {
