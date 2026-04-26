@@ -105,6 +105,24 @@ def test_download_symbol_skips_existing_file_without_overwrite(
     assert file_path.read_bytes() == b"eksisterende"
 
 
+def test_download_symbol_creates_output_directory(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    nested_output_dir = tmp_path / "missing" / "weather-symbols"
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", nested_output_dir)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert (nested_output_dir / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
+
+
 def test_download_all_symbols_creates_output_directory(
     monkeypatch: Any, tmp_path: Path
 ) -> None:

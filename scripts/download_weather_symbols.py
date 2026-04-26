@@ -117,6 +117,11 @@ def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | Non
 def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     target_path = OUTPUT_DIR / f"{symbol_code}.svg"
 
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+
     if not overwrite and target_path.exists():
         return True
 
