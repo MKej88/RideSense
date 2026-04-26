@@ -12,7 +12,9 @@ def _load_weather_symbols_module() -> Any:
         / "scripts"
         / "download_weather_symbols.py"
     )
-    spec = importlib.util.spec_from_file_location("download_weather_symbols", module_path)
+    spec = importlib.util.spec_from_file_location(
+        "download_weather_symbols", module_path
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load module spec for {module_path}")
 
@@ -39,7 +41,9 @@ class _FakeResponse:
         return self._payload
 
 
-def test_download_symbol_saves_file_on_success(monkeypatch: Any, tmp_path: Path) -> None:
+def test_download_symbol_saves_file_on_success(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
 
     def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
@@ -208,7 +212,9 @@ def test_download_all_symbols_creates_output_directory(
 
     monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
 
-    ok_count, fail_count = weather_symbols.download_all_symbols(["clearsky_day"], workers=1)
+    ok_count, fail_count = weather_symbols.download_all_symbols(
+        ["clearsky_day"], workers=1
+    )
 
     assert ok_count == 1
     assert fail_count == 0
