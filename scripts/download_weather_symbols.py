@@ -114,6 +114,13 @@ def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | Non
     return svg_bytes
 
 
+def _is_valid_cached_svg(target_path: Path) -> bool:
+    try:
+        return target_path.is_file() and target_path.stat().st_size > 0
+    except OSError:
+        return False
+
+
 def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     target_path = OUTPUT_DIR / f"{symbol_code}.svg"
 
@@ -122,12 +129,21 @@ def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     except OSError:
         return False
 
-    if not overwrite and target_path.exists():
+    if not overwrite and target_path.exists() and _is_valid_cached_svg(target_path):
         return True
 
     svg_bytes = _fetch_svg_bytes(symbol_code)
     if svg_bytes is None:
         return False
+
+    if target_path.exists():
+        try:
+            if target_path.is_dir():
+                target_path.rmdir()
+            else:
+                target_path.unlink()
+        except OSError:
+            return False
 
     try:
         target_path.write_bytes(svg_bytes)

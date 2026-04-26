@@ -105,6 +105,44 @@ def test_download_symbol_skips_existing_file_without_overwrite(
     assert file_path.read_bytes() == b"eksisterende"
 
 
+def test_download_symbol_refetches_empty_cached_file(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+    file_path = tmp_path / "clearsky_day.svg"
+    file_path.write_bytes(b"")
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>fresh</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert file_path.read_bytes() == b"<svg>fresh</svg>"
+
+
+def test_download_symbol_refetches_when_path_is_directory(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+    target_path = tmp_path / "clearsky_day.svg"
+    target_path.mkdir()
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>fresh</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert target_path.read_bytes() == b"<svg>fresh</svg>"
+
+
 def test_download_symbol_creates_output_directory(
     monkeypatch: Any, tmp_path: Path
 ) -> None:
