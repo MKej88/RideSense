@@ -1,4 +1,4 @@
-name: Python-sjekker
+name: Kvalitetssjekker
 
 on:
   pull_request:
