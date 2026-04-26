@@ -6,6 +6,7 @@ from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 BASE_URL = (
     "https://raw.githubusercontent.com/metno/weathericons/main/weather/svg/{code}.svg"
@@ -116,9 +117,14 @@ def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | Non
 
 def _is_valid_cached_svg(target_path: Path) -> bool:
     try:
-        return target_path.is_file() and target_path.stat().st_size > 0
-    except OSError:
+        if not target_path.is_file() or target_path.stat().st_size <= 0:
+            return False
+
+        root = ElementTree.parse(target_path).getroot()
+    except (OSError, ElementTree.ParseError):
         return False
+
+    return root.tag.endswith("svg")
 
 
 def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:

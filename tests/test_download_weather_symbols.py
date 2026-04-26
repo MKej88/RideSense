@@ -92,7 +92,7 @@ def test_download_symbol_skips_existing_file_without_overwrite(
 ) -> None:
     monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
     file_path = tmp_path / "clearsky_day.svg"
-    file_path.write_bytes(b"eksisterende")
+    file_path.write_bytes(b"<svg>eksisterende</svg>")
 
     def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
         raise AssertionError("urlopen skal ikke kalles nar fil finnes")
@@ -102,7 +102,7 @@ def test_download_symbol_skips_existing_file_without_overwrite(
     result = weather_symbols.download_symbol("clearsky_day")
 
     assert result is True
-    assert file_path.read_bytes() == b"eksisterende"
+    assert file_path.read_bytes() == b"<svg>eksisterende</svg>"
 
 
 def test_download_symbol_refetches_empty_cached_file(
@@ -111,6 +111,25 @@ def test_download_symbol_refetches_empty_cached_file(
     monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
     file_path = tmp_path / "clearsky_day.svg"
     file_path.write_bytes(b"")
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>fresh</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is True
+    assert file_path.read_bytes() == b"<svg>fresh</svg>"
+
+
+def test_download_symbol_refetches_corrupt_cached_file(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+    file_path = tmp_path / "clearsky_day.svg"
+    file_path.write_bytes(b"x")
 
     def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
         assert timeout == 15
