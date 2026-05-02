@@ -44,7 +44,7 @@ interface LeafletMarkerLike {
 interface LeafletDivIconLike {}
 
 const LEAFLET_CSS_ID = "ridesense-leaflet-css";
-const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_CSS_URL = "/leaflet.css";
 
 interface LocationMapClientProps {
   lat: number;
@@ -77,13 +77,20 @@ export function LocationMapClient({
       return;
     }
 
+    let disposed = false;
+
     const initializeMap = async (): Promise<void> => {
       try {
         ensureLeafletCss();
         const leafletModule = await import("leaflet");
+
+        if (disposed || !mapContainerRef.current) {
+          return;
+        }
+
         const leaflet = leafletModule.default as unknown as LeafletLike;
 
-        const map = leaflet.map(mapContainerRef.current as HTMLDivElement);
+        const map = leaflet.map(mapContainerRef.current);
         mapRef.current = map;
 
         leaflet
@@ -117,17 +124,22 @@ export function LocationMapClient({
         markerRef.current = marker;
 
         map.setView(initialPositionRef.current, 12);
-        setLoadError(null);
+        if (!disposed) {
+          setLoadError(null);
+        }
       } catch {
-        setLoadError(
-          "Kartbiblioteket Leaflet mangler. Kjør 'npm install' og start serveren på nytt."
-        );
+        if (!disposed) {
+          setLoadError(
+            "Kartbiblioteket Leaflet mangler. Kjør 'npm install' og start serveren på nytt."
+          );
+        }
       }
     };
 
     void initializeMap();
 
     return () => {
+      disposed = true;
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -173,7 +185,5 @@ function ensureLeafletCss(): void {
   stylesheet.id = LEAFLET_CSS_ID;
   stylesheet.rel = "stylesheet";
   stylesheet.href = LEAFLET_CSS_URL;
-  stylesheet.crossOrigin = "";
-  stylesheet.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=";
   document.head.appendChild(stylesheet);
 }
