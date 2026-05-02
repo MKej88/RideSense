@@ -43,6 +43,9 @@ interface LeafletMarkerLike {
 
 interface LeafletDivIconLike {}
 
+const LEAFLET_CSS_ID = "ridesense-leaflet-css";
+const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+
 interface LocationMapClientProps {
   lat: number;
   lon: number;
@@ -76,6 +79,7 @@ export function LocationMapClient({
 
     const initializeMap = async (): Promise<void> => {
       try {
+        ensureLeafletCss();
         const leafletModule = await import("leaflet");
         const leaflet = leafletModule.default as unknown as LeafletLike;
 
@@ -158,4 +162,18 @@ export function LocationMapClient({
       )}
     </section>
   );
+}
+
+function ensureLeafletCss(): void {
+  if (typeof document === "undefined" || document.getElementById(LEAFLET_CSS_ID)) {
+    return;
+  }
+
+  const stylesheet = document.createElement("link");
+  stylesheet.id = LEAFLET_CSS_ID;
+  stylesheet.rel = "stylesheet";
+  stylesheet.href = LEAFLET_CSS_URL;
+  stylesheet.crossOrigin = "";
+  stylesheet.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=";
+  document.head.appendChild(stylesheet);
 }
