@@ -200,9 +200,7 @@ def test_download_symbol_creates_output_directory(
     assert (nested_output_dir / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
 
 
-def test_download_symbol_uses_custom_timeout(
-    monkeypatch: Any, tmp_path: Path
-) -> None:
+def test_download_symbol_uses_custom_timeout(monkeypatch: Any, tmp_path: Path) -> None:
     monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
 
     def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
