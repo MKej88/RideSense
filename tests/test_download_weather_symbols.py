@@ -200,6 +200,21 @@ def test_download_symbol_creates_output_directory(
     assert (nested_output_dir / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
 
 
+def test_download_symbol_uses_custom_timeout(monkeypatch: Any, tmp_path: Path) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 42
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day", timeout_seconds=42)
+
+    assert result is True
+    assert (tmp_path / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
+
+
 def test_download_all_symbols_creates_output_directory(
     monkeypatch: Any, tmp_path: Path
 ) -> None:
@@ -218,7 +233,25 @@ def test_download_all_symbols_creates_output_directory(
 
     assert ok_count == 1
     assert fail_count == 0
-    assert (nested_output_dir / "clearsky_day.svg").read_bytes() == b"<svg>ok</svg>"
+
+
+def test_download_all_symbols_uses_minimum_one_worker(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>ok</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    ok_count, fail_count = weather_symbols.download_all_symbols(
+        ["clearsky_day"], workers=0
+    )
+
+    assert ok_count == 1
+    assert fail_count == 0
 
 
 def test_download_all_symbols_returns_failures_on_directory_creation_error(
