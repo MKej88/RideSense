@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
@@ -98,7 +99,7 @@ SYMBOL_CODES = [
 ]
 
 
-def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | None:
+def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int) -> bytes | None:
     request = Request(
         BASE_URL.format(code=symbol_code),
         headers={"User-Agent": USER_AGENT},
@@ -128,7 +129,11 @@ def _is_valid_cached_svg(target_path: Path) -> bool:
     return root.tag.endswith("svg")
 
 
-def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
+def download_symbol(
+    symbol_code: str,
+    overwrite: bool = False,
+    timeout_seconds: int = 15,
+) -> bool:
     target_path = OUTPUT_DIR / f"{symbol_code}.svg"
 
     try:
@@ -139,7 +144,7 @@ def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     if not overwrite and target_path.exists() and _is_valid_cached_svg(target_path):
         return True
 
-    svg_bytes = _fetch_svg_bytes(symbol_code)
+    svg_bytes = _fetch_svg_bytes(symbol_code, timeout_seconds=timeout_seconds)
     if svg_bytes is None:
         return False
 
@@ -160,8 +165,12 @@ def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     return True
 
 
-def _download_and_report(symbol_code: str, overwrite: bool = False) -> bool:
-    success = download_symbol(symbol_code, overwrite=overwrite)
+def _download_and_report(
+    symbol_code: str, overwrite: bool = False, timeout_seconds: int = 15
+) -> bool:
+    success = download_symbol(
+        symbol_code, overwrite=overwrite, timeout_seconds=timeout_seconds
+    )
     if success:
         print(f"OK  {symbol_code}")
     else:
@@ -173,6 +182,7 @@ def download_all_symbols(
     symbol_codes: list[str] | tuple[str, ...],
     workers: int = DEFAULT_WORKERS,
     overwrite: bool = False,
+    timeout_seconds: int = 15,
 ) -> tuple[int, int]:
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -183,7 +193,11 @@ def download_all_symbols(
     ok_count = 0
 
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        download_fn = partial(_download_and_report, overwrite=overwrite)
+        download_fn = partial(
+            _download_and_report,
+            overwrite=overwrite,
+            timeout_seconds=timeout_seconds,
+        )
         for was_ok in executor.map(download_fn, symbol_codes):
             if was_ok:
                 ok_count += 1
@@ -192,8 +206,46 @@ def download_all_symbols(
     return ok_count, fail_count
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Last ned værikoner fra MET weathericons."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help=f"Antall samtidige nedlastinger (standard: {DEFAULT_WORKERS}).",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overskriv lokale filer selv om de ser gyldige ut.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=15,
+        help="Timeout per fil i sekunder (standard: 15).",
+    )
+    parser.add_argument(
+        "symbol_codes",
+        nargs="*",
+        help="Valgfri liste med symbolkoder. Uten input brukes standardlisten.",
+    )
+    return parser
+
+
 def main() -> None:
-    ok_count, fail_count = download_all_symbols(SYMBOL_CODES)
+    parser = _build_parser()
+    args = parser.parse_args()
+    symbol_codes = args.symbol_codes or SYMBOL_CODES
+
+    ok_count, fail_count = download_all_symbols(
+        symbol_codes,
+        workers=args.workers,
+        overwrite=args.overwrite,
+        timeout_seconds=args.timeout_seconds,
+    )
     print(f"\nFerdig. Lastet ned: {ok_count}, feilet: {fail_count}")
 
 
