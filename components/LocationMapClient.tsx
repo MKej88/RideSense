@@ -2,9 +2,49 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
-import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+
+interface LeafletLike {
+  map: (element: HTMLDivElement) => LeafletMapLike;
+  tileLayer: (
+    urlTemplate: string,
+    options: {
+      minZoom: number;
+      maxZoom: number;
+      subdomains: string;
+      attribution: string;
+    }
+  ) => { addTo: (map: LeafletMapLike) => void };
+  divIcon: (options: {
+    className: string;
+    html: string;
+    iconSize: [number, number];
+  }) => LeafletDivIconLike;
+  marker: (
+    latLng: [number, number],
+    options: {
+      draggable: boolean;
+      icon: LeafletDivIconLike | null;
+    }
+  ) => LeafletMarkerLike;
+}
+
+interface LeafletMapLike {
+  setView: (latLng: [number, number], zoom: number) => void;
+  remove: () => void;
+}
+
+interface LeafletMarkerLike {
+  addTo: (map: LeafletMapLike) => void;
+  bindPopup: (label: string) => { openPopup: () => void };
+  on: (event: string, callback: () => void) => void;
+  getLatLng: () => { lat: number; lng: number };
+  setLatLng: (latLng: [number, number]) => void;
+}
+
+interface LeafletDivIconLike {}
+
+const LEAFLET_CSS_ID = "ridesense-leaflet-css";
+const LEAFLET_CSS_URL = "/leaflet.css";
 
 interface LocationMapClientProps {
   lat: number;
@@ -20,9 +60,9 @@ export function LocationMapClient({
   onMarkerMoved
 }: LocationMapClientProps): ReactElement {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const markerRef = useRef<LeafletMarker | null>(null);
-  const iconRef = useRef<DivIcon | null>(null);
+  const mapRef = useRef<LeafletMapLike | null>(null);
+  const markerRef = useRef<LeafletMarkerLike | null>(null);
+  const iconRef = useRef<LeafletDivIconLike | null>(null);
   const onMarkerMovedRef = useRef(onMarkerMoved);
   const initialPositionRef = useRef<[number, number]>([lat, lon]);
   const initialLabelRef = useRef(label);
@@ -37,46 +77,69 @@ export function LocationMapClient({
       return;
     }
 
-    try {
-      const map = L.map(mapContainerRef.current);
-      mapRef.current = map;
+    let disposed = false;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        minZoom: 0,
-        maxZoom: 18,
-        subdomains: "abc",
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+    const initializeMap = async (): Promise<void> => {
+      try {
+        ensureLeafletCss();
+        const leafletModule = await import("leaflet");
 
-      if (!iconRef.current) {
-        iconRef.current = L.divIcon({
-          className: "ridesense-map-pin",
-          html: '<span class="ridesense-map-pin-dot"></span>',
-          iconSize: [20, 20]
+        if (disposed || !mapContainerRef.current) {
+          return;
+        }
+
+        const leaflet = leafletModule.default as unknown as LeafletLike;
+
+        const map = leaflet.map(mapContainerRef.current);
+        mapRef.current = map;
+
+        leaflet
+          .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            minZoom: 0,
+            maxZoom: 18,
+            subdomains: "abc",
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          })
+          .addTo(map);
+
+        if (!iconRef.current) {
+          iconRef.current = leaflet.divIcon({
+            className: "ridesense-map-pin",
+            html: '<span class="ridesense-map-pin-dot"></span>',
+            iconSize: [20, 20]
+          });
+        }
+
+        const marker = leaflet.marker(initialPositionRef.current, {
+          draggable: true,
+          icon: iconRef.current
         });
+        marker.addTo(map);
+        marker.bindPopup(initialLabelRef.current).openPopup();
+        marker.on("dragend", () => {
+          const nextPosition = marker.getLatLng();
+          onMarkerMovedRef.current(nextPosition.lat, nextPosition.lng);
+        });
+        markerRef.current = marker;
+
+        map.setView(initialPositionRef.current, 12);
+        if (!disposed) {
+          setLoadError(null);
+        }
+      } catch {
+        if (!disposed) {
+          setLoadError(
+            "Kartbiblioteket Leaflet mangler. Kjør 'npm install' og start serveren på nytt."
+          );
+        }
       }
+    };
 
-      const marker = L.marker(initialPositionRef.current, {
-        draggable: true,
-        icon: iconRef.current
-      });
-      marker.addTo(map);
-      marker.bindPopup(initialLabelRef.current).openPopup();
-      marker.on("dragend", () => {
-        const nextPosition = marker.getLatLng();
-        onMarkerMovedRef.current(nextPosition.lat, nextPosition.lng);
-      });
-      markerRef.current = marker;
-
-      map.setView(initialPositionRef.current, 12);
-      setLoadError(null);
-    } catch {
-      setLoadError(
-        "Kartet kunne ikke startes. Last siden på nytt, eller prøv igjen senere."
-      );
-    }
+    void initializeMap();
 
     return () => {
+      disposed = true;
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -111,4 +174,16 @@ export function LocationMapClient({
       )}
     </section>
   );
+}
+
+function ensureLeafletCss(): void {
+  if (typeof document === "undefined" || document.getElementById(LEAFLET_CSS_ID)) {
+    return;
+  }
+
+  const stylesheet = document.createElement("link");
+  stylesheet.id = LEAFLET_CSS_ID;
+  stylesheet.rel = "stylesheet";
+  stylesheet.href = LEAFLET_CSS_URL;
+  document.head.appendChild(stylesheet);
 }
