@@ -4,7 +4,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from socket import timeout as SocketTimeout
 from tempfile import NamedTemporaryFile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -108,7 +107,7 @@ def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | Non
     try:
         with urlopen(request, timeout=timeout_seconds) as response:
             svg_bytes = response.read()
-    except (HTTPError, URLError, TimeoutError, SocketTimeout):
+    except (HTTPError, URLError, TimeoutError):
         return None
 
     if not _is_valid_svg_bytes(svg_bytes):
