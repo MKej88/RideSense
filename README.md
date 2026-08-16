@@ -24,10 +24,9 @@ For valgt sted vises timeverdier for blant annet:
 
 Hver time får en **værscore (0–100)**:
 
-- **80–100:** bra
-- **60–79:** ok
-- **40–59:** dårlig
-- **0–39:** svært dårlig
+- **75–100:** bra
+- **50–74:** ok
+- **0–49:** dårlig
 
 ### 3) To visninger av prognosen
 

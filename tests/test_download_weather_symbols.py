@@ -115,7 +115,7 @@ def test_download_symbol_skips_existing_file_without_overwrite(
     file_path.write_bytes(b"<svg>eksisterende</svg>")
 
     def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
-        raise AssertionError("urlopen skal ikke kalles nar fil finnes")
+        raise AssertionError("urlopen skal ikke kalles når fil finnes")
 
     monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
 
@@ -161,6 +161,66 @@ def test_download_symbol_refetches_corrupt_cached_file(
 
     assert result is True
     assert file_path.read_bytes() == b"<svg>fresh</svg>"
+
+
+def test_download_symbol_overwrites_existing_file_when_requested(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+    file_path = tmp_path / "clearsky_day.svg"
+    file_path.write_bytes(b"<svg>gammel</svg>")
+    request_count = 0
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        nonlocal request_count
+        assert timeout == 15
+        request_count += 1
+        return _FakeResponse(b"<svg>ny</svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day", overwrite=True)
+
+    assert result is True
+    assert request_count == 1
+    assert file_path.read_bytes() == b"<svg>ny</svg>"
+
+
+def test_download_symbol_keeps_existing_file_when_response_is_not_svg(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+    file_path = tmp_path / "clearsky_day.svg"
+    original_svg = b'<svg xmlns="http://www.w3.org/2000/svg">gammel</svg>'
+    file_path.write_bytes(original_svg)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<html>Feil fra tjenesten</html>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day", overwrite=True)
+
+    assert result is False
+    assert file_path.read_bytes() == original_svg
+
+
+def test_download_symbol_rejects_malformed_xml(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(weather_symbols, "OUTPUT_DIR", tmp_path)
+
+    def fake_urlopen(_request: Any, timeout: int = 15) -> _FakeResponse:
+        assert timeout == 15
+        return _FakeResponse(b"<svg>")
+
+    monkeypatch.setattr(weather_symbols, "urlopen", fake_urlopen)
+
+    result = weather_symbols.download_symbol("clearsky_day")
+
+    assert result is False
+    assert not (tmp_path / "clearsky_day.svg").exists()
 
 
 def test_download_symbol_refetches_when_path_is_directory(
