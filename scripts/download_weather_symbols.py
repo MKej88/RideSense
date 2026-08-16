@@ -4,7 +4,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from socket import timeout as SocketTimeout
+from tempfile import NamedTemporaryFile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
@@ -107,13 +107,25 @@ def _fetch_svg_bytes(symbol_code: str, timeout_seconds: int = 15) -> bytes | Non
     try:
         with urlopen(request, timeout=timeout_seconds) as response:
             svg_bytes = response.read()
-    except (HTTPError, URLError, TimeoutError, SocketTimeout):
+    except (HTTPError, URLError, TimeoutError):
         return None
 
-    if not svg_bytes.strip():
+    if not _is_valid_svg_bytes(svg_bytes):
         return None
 
     return svg_bytes
+
+
+def _is_valid_svg_bytes(svg_bytes: bytes) -> bool:
+    if not svg_bytes.strip():
+        return False
+
+    try:
+        root = ElementTree.fromstring(svg_bytes)
+    except ElementTree.ParseError:
+        return False
+
+    return isinstance(root.tag, str) and root.tag.rsplit("}", 1)[-1] == "svg"
 
 
 def _is_valid_cached_svg(target_path: Path) -> bool:
@@ -121,11 +133,11 @@ def _is_valid_cached_svg(target_path: Path) -> bool:
         if not target_path.is_file() or target_path.stat().st_size <= 0:
             return False
 
-        root = ElementTree.parse(target_path).getroot()
-    except (OSError, ElementTree.ParseError):
+        svg_bytes = target_path.read_bytes()
+    except OSError:
         return False
 
-    return root.tag.endswith("svg")
+    return _is_valid_svg_bytes(svg_bytes)
 
 
 def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
@@ -143,19 +155,26 @@ def download_symbol(symbol_code: str, overwrite: bool = False) -> bool:
     if svg_bytes is None:
         return False
 
-    if target_path.exists():
-        try:
-            if target_path.is_dir():
-                target_path.rmdir()
-            else:
-                target_path.unlink()
-        except OSError:
-            return False
-
+    temporary_path: Path | None = None
     try:
-        target_path.write_bytes(svg_bytes)
+        with NamedTemporaryFile(
+            dir=target_path.parent,
+            prefix=f".{target_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_file.write(svg_bytes)
+            temporary_path = Path(temporary_file.name)
+
+        if target_path.is_dir():
+            target_path.rmdir()
+
+        temporary_path.replace(target_path)
     except OSError:
         return False
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
     return True
 

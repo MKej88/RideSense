@@ -1,83 +1,107 @@
-# Kodegjennomgang – foreslåtte oppgaver
+# Kodegjennomgang – fire fullførte oppgaver
 
-Denne gjennomgangen foreslår fire konkrete oppgaver: én skrivefeil, én bug, én dokumentasjons-/kommentaravvik og én testforbedring.
+De fire oppgavene fra kodegjennomgangen er nå utført. Her er en enkel oversikt
+over hva som ble rettet og hvordan rettingene kontrolleres.
 
-## 1) Oppgave: Fiks skrivefeil/tekstinkonsistens i README
+## 1) Skrivefeil: «nar» er endret til «når»
 
-**Problem (enkelt forklart):**
-I README brukes både «stedssøk» og «sted/adressesøk». Det blir litt ujevnt språk og kan se ut som en skrivefeil for brukere.
+**Hva er problemet?**
 
-**Hvor:**
-- `README.md` (seksjonen med API-endepunkter)
+En feilmelding i testen sier «nar fil finnes». Det norske ordet skal være «når».
+Feilen påvirker ikke selve programmet, men gjør testen mindre ryddig og
+feilmeldingen vanskeligere å lese dersom testen feiler.
 
-**Forslag til løsning:**
-- Bytt «sted/adressesøk» til en mer konsekvent formulering, for eksempel «steds- og adressesøk».
-- Gå over README for samme type små tekstinkonsistenser.
+**Hvor finnes det?**
 
-**Akseptansekriterier:**
-- README bruker samme begrep konsekvent i hele dokumentet.
-- Ingen uklare eller blandede formuleringer rundt sted/adresse-søk.
+- `tests/test_download_weather_symbols.py`, i testen
+  `test_download_symbol_skips_existing_file_without_overwrite`.
 
----
+**Løsning:**
 
-## 2) Oppgave: Fiks validerings-bug for koordinater i API
+- Teksten er endret til «urlopen skal ikke kalles når fil finnes».
 
-**Problem (enkelt forklart):**
-API-et for ruteanalyse sjekker at koordinater er tall, men ikke om de faktisk er gyldige geografiske koordinater. Da kan ugyldige verdier (f.eks. breddegrad 999) slippe gjennom.
+**Ferdig når:**
 
-**Hvor:**
-- `app/api/route-analysis/route.ts`
+- Ordet er rettet uten at testens oppførsel er endret.
+- `pytest` fortsatt passerer.
 
-**Forslag til løsning:**
-- Legg til validering:
-  - `lat` må være mellom `-90` og `90`
-  - `lon` må være mellom `-180` og `180`
-- Returner `400` med tydelig feilmelding hvis verdier er utenfor gyldig område.
+## 2) Bug: SVG-innhold kontrolleres før en fil lagres
 
-**Akseptansekriterier:**
-- Ugyldige koordinater stopper tidlig med `400`.
-- Gyldige koordinater fungerer som før.
-- Feilmeldingen forklarer hva som er galt.
+**Hva er problemet?**
 
----
+Nedlastingen godtar alle svar som inneholder minst ett tegn. Hvis nettjenesten
+for eksempel svarer med en HTML-feilside og status 200, blir feilsiden lagret med
+`.svg`-endelse. Ved overskriving slettes dessuten den gamle, fungerende filen før
+det nye innholdet skrives. En bruker kan derfor ende opp med et ødelagt værikon.
 
-## 3) Oppgave: Rett dokumentasjonsavvik mellom README og faktisk ruteanalyse
+**Hvor finnes det?**
 
-**Problem (enkelt forklart):**
-README beskriver ruteanalyse som «1–3 tur/retur-ruter med min/maks km». Grensesnitt/API ser nå ut til å analysere valgt start- og stoppadresse (brukervalgt rute), ikke den samme flyten som README beskriver.
+- `scripts/download_weather_symbols.py`, i `_fetch_svg_bytes` og
+  `download_symbol`.
 
-**Hvor:**
-- `README.md` (seksjonen «Ruteanalyse (1–3 ruter)»)
-- `app/api/route-analysis/route.ts` (tar `startLat/startLon/stopLat/stopLon`)
-- `app/page.tsx` (UI med startadresse + stoppadresse)
+**Løsning:**
 
-**Forslag til løsning:**
-- Oppdater README så den beskriver dagens løsning korrekt.
-- Hvis begge flyter finnes/skal finnes, dokumenter tydelig forskjellen og hvilke parametere som brukes.
+- De nedlastede bytene parses med `xml.etree.ElementTree` før noe lagres.
+- Bare XML der rotelementet faktisk heter `svg`, med eller uten SVG-navnerom,
+  godtas.
+- Innholdet skrives først til en midlertidig fil. Målfila erstattes først etter
+  vellykket validering, slik at et fungerende ikon beholdes ved ugyldige svar.
 
-**Akseptansekriterier:**
-- README samsvarer med faktisk funksjonalitet i UI og API.
-- Bruker skjønner uten kodekunnskap hvordan ruteanalyse fungerer nå.
+**Ferdig når:**
 
----
+- Gyldig SVG lagres som før.
+- Tomt innhold, ugyldig XML og HTML avvises.
+- Et eksisterende, gyldig ikon ikke slettes når et nytt svar er ugyldig.
+- `pytest` passerer uten nettilgang.
 
-## 4) Oppgave: Forbedre tester med enkel Python-basert API-smoketest
+## 3) Dokumentasjonsavvik: README viser de faktiske scoregrensene
 
-**Problem (enkelt forklart):**
-Prosjektet har lint og typecheck, men ingen tydelig automatisert testkommando for funksjonell oppførsel. Da er det lettere at regresjoner slipper inn.
+**Hva er problemet?**
 
-**Hvor:**
-- `package.json` (mangler test-script)
-- Ny testmappe, f.eks. `tests/` med pytest
+README beskriver fire nivåer: «bra» fra 80 poeng, «ok» fra 60, «dårlig» fra 40
+og «svært dårlig» under 40. Koden lager derimot bare tre nivåer: «bra» fra 75,
+«ok» fra 50 og «dårlig» under 50. En bruker kan derfor lese én forklaring og se
+en annen vurdering i appen.
 
-**Forslag til løsning (Python-vennlig):**
-- Lag enkle `pytest`-smoketester som kaller API-rutene og verifiserer:
-  1. `GET /api/weather` returnerer `400` ved manglende/ugyldig lat/lon.
-  2. `GET /api/route-analysis` returnerer `400` ved ugyldig start/stopp-koordinater.
-  3. Gyldig kall returnerer JSON med forventede felter (`hours`, `route`, osv.).
-- Hold testene små og lesbare.
+**Hvor finnes det?**
 
-**Akseptansekriterier:**
-- `pytest` kan kjøres lokalt og gir tydelig grønt/rødt svar.
-- Minst én negativ og én positiv test per API-rute som er kritisk.
-- Tester dokumenteres kort i README under «Nyttige kommandoer».
+- `README.md`, under «Værscore time for time».
+- `lib/scoring.ts`, i `getScoreLabel`.
+- `components/ScoreBadge.tsx`, der de tre nivåene vises.
+
+**Løsning:**
+
+- README beskriver nå de samme tre nivåene som appen bruker: «bra» fra 75 poeng,
+  «ok» fra 50 poeng og «dårlig» under 50 poeng.
+
+**Ferdig når:**
+
+- README og appen bruker samme antall nivåer, navn og poenggrenser.
+- En ikke-teknisk bruker kan forstå hvilken merkelapp en poengsum får.
+
+## 4) Testforbedring: `overwrite=True` testes uten ekte nettverk
+
+**Hva er problemet?**
+
+Testene kontrollerer at en eksisterende fil beholdes når overskriving er slått
+av, men de kontrollerer ikke motsatt tilfelle. Dermed kan funksjonen slutte å
+respektere `overwrite=True` uten at testene oppdager det.
+
+**Hvor finnes det?**
+
+- `tests/test_download_weather_symbols.py`.
+- `scripts/download_weather_symbols.py`, i `download_symbol`.
+
+**Løsning:**
+
+- En ny `pytest`-test oppretter en gammel SVG, bruker en falsk nedlasting og
+  kontrollerer at `overwrite=True` lagrer det nye innholdet.
+- En ekstra test kontrollerer at et HTML-svar avvises uten at det gamle ikonet
+  blir ødelagt.
+- Testene bruker ikke internett.
+
+**Ferdig når:**
+
+- Testen feiler dersom `overwrite=True` ignoreres.
+- Testen er stabil uten nettverk.
+- `pytest` passerer.
