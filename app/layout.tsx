@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,12 +34,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 pb-8 pt-4 text-xs text-slate-500">
           <span>RideSense</span>
-          <a href="/privacy" className="hover:text-slate-300">
+          <Link href="/privacy" className="hover:text-slate-300">
             Personvern
-          </a>
-          <a href="/support" className="hover:text-slate-300">
+          </Link>
+          <Link href="/support" className="hover:text-slate-300">
             Support
-          </a>
+          </Link>
         </footer>
       </body>
     </html>
