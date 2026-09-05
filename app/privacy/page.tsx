@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Personvern | RideSense",
   description: "Personvernerklæring for RideSense."
@@ -6,9 +8,9 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-5 py-10 text-slate-100">
-      <a href="/" className="text-sm text-cyan-300 hover:text-cyan-200">
+      <Link href="/" className="text-sm text-cyan-300 hover:text-cyan-200">
         ← Tilbake til RideSense
-      </a>
+      </Link>
 
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">Personvernerklæring</h1>
       <p className="mt-3 text-sm text-slate-400">Sist oppdatert: 5. september 2026</p>
@@ -100,7 +102,11 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-xl font-semibold text-white">9. Kontakt</h2>
           <p className="mt-3">
-            Kontakt RideSense via <a className="text-cyan-300 hover:text-cyan-200" href="/support">supportsiden</a>.
+            Kontakt RideSense via{" "}
+            <Link className="text-cyan-300 hover:text-cyan-200" href="/support">
+              supportsiden
+            </Link>
+            .
           </p>
         </section>
       </div>
