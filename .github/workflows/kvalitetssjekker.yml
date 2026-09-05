@@ -56,3 +56,6 @@ jobs:
 
       - name: TypeScript typecheck
         run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
