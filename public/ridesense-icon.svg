@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">RideSense</title>
+  <desc id="desc">Stilisert sykkelhjul med vær- og rutesymbol.</desc>
+  <rect width="512" height="512" rx="112" fill="#020b23"/>
+  <circle cx="150" cy="330" r="82" fill="none" stroke="#67e8f9" stroke-width="24"/>
+  <circle cx="362" cy="330" r="82" fill="none" stroke="#67e8f9" stroke-width="24"/>
+  <path d="M150 330 230 214h76l56 116M230 214l-42-48h-58M230 214l68 116H150l80-116Z" fill="none" stroke="#2dd4bf" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M312 116c35-35 91-35 126 0" fill="none" stroke="#67e8f9" stroke-width="20" stroke-linecap="round"/>
+  <path d="M332 151c24-24 62-24 86 0" fill="none" stroke="#2dd4bf" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="375" cy="184" r="13" fill="#99f6e4"/>
+</svg>
