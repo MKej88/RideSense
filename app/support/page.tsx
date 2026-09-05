@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Support | RideSense",
   description: "Hjelp og kontaktinformasjon for RideSense."
@@ -8,9 +10,9 @@ const githubIssuesUrl = "https://github.com/MKej88/RideSense/issues";
 export default function SupportPage() {
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-5 py-10 text-slate-100">
-      <a href="/" className="text-sm text-cyan-300 hover:text-cyan-200">
+      <Link href="/" className="text-sm text-cyan-300 hover:text-cyan-200">
         ← Tilbake til RideSense
-      </a>
+      </Link>
 
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">RideSense support</h1>
       <p className="mt-4 leading-relaxed text-slate-300">
@@ -46,8 +48,11 @@ export default function SupportPage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h2 className="text-lg font-semibold">Personvern</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-300">
-            Les <a href="/privacy" className="text-cyan-300 hover:text-cyan-200">personvernerklæringen</a> for
-            informasjon om hvilke opplysninger som behandles og hvordan RideSense bruker eksterne
+            Les{" "}
+            <Link href="/privacy" className="text-cyan-300 hover:text-cyan-200">
+              personvernerklæringen
+            </Link>{" "}
+            for informasjon om hvilke opplysninger som behandles og hvordan RideSense bruker eksterne
             datakilder.
           </p>
         </section>
