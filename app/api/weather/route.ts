@@ -5,11 +5,20 @@ import { fetchForecastForLocation } from "@/lib/weather";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const lat = Number(request.nextUrl.searchParams.get("lat"));
-  const lon = Number(request.nextUrl.searchParams.get("lon"));
+  const latitudeParam = request.nextUrl.searchParams.get("lat");
+  const longitudeParam = request.nextUrl.searchParams.get("lon");
+  const lat = latitudeParam === null || latitudeParam.trim() === "" ? NaN : Number(latitudeParam);
+  const lon = longitudeParam === null || longitudeParam.trim() === "" ? NaN : Number(longitudeParam);
   const label = request.nextUrl.searchParams.get("label") || "Valgt sted";
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  ) {
     return NextResponse.json(
       createApiError(
         "UGYLDIG_INPUT",
