@@ -1,0 +1,29 @@
+name: npm sikkerhetskontroll
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "15 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit (høy og kritisk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Installer fra låsefil
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Avvis høy og kritisk alvorlighetsgrad i produksjonsavhengigheter
+        run: npm audit --omit=dev --audit-level=high
