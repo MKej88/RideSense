@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import sys
-from typing import Any
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 
 
 def _load_weather_symbols_module() -> Any:
@@ -31,10 +32,15 @@ class _FakeResponse:
     def __init__(self, payload: bytes) -> None:
         self._payload = payload
 
-    def __enter__(self) -> "_FakeResponse":
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         return None
 
     def read(self) -> bytes:
