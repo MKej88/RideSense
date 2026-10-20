@@ -1,0 +1,50 @@
+name: Prepare Tailwind CSS 4 lockfile (temporary)
+on:
+  push:
+    branches:
+      - upgrade/tailwind4-20261020
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Update package-lock.json
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: ESLint
+        run: npm run lint
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Check generated CSS
+        run: |
+          if ! grep -Rql 'rs-surface' .next/static; then
+            echo "::error::Missing RideSense surface CSS in production assets"
+            exit 1
+          fi
+          if ! grep -Rql 'bg-slate-900' .next/static; then
+            echo "::error::Missing Tailwind background utility in production assets"
+            exit 1
+          fi
+      - name: Commit lockfile after checks pass
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Regenerate npm lockfile for Tailwind CSS 4"
+          git push origin HEAD:upgrade/tailwind4-20261020
