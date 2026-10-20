@@ -147,33 +147,24 @@ export default function HomePage() {
     [analysisRunMs, visibleWeatherHours]
   );
 
-  useEffect(() => {
-    if (forecastRange !== "7d") {
-      return;
-    }
-
-    if (forecastDays.length === 0) {
-      setSelectedForecastDay(null);
-      return;
-    }
-
-    if (!selectedForecastDay || !forecastDays.some((day) => day.dayKey === selectedForecastDay)) {
-      setSelectedForecastDay(forecastDays[0].dayKey);
-    }
-  }, [forecastDays, forecastRange, selectedForecastDay]);
+  const effectiveSelectedForecastDay = forecastDays.some(
+    (day) => day.dayKey === selectedForecastDay
+  )
+    ? selectedForecastDay
+    : forecastDays[0]?.dayKey ?? null;
 
   const displayedForecastHours = useMemo(() => {
     if (forecastRange === "24h") {
       return visibleWeatherHours;
     }
 
-    const selectedDay = forecastDays.find((day) => day.dayKey === selectedForecastDay);
+    const selectedDay = forecastDays.find((day) => day.dayKey === effectiveSelectedForecastDay);
     return selectedDay?.hours || [];
-  }, [forecastDays, forecastRange, selectedForecastDay, visibleWeatherHours]);
+  }, [effectiveSelectedForecastDay, forecastDays, forecastRange, visibleWeatherHours]);
 
   const selectedForecastDayData = useMemo(
-    () => forecastDays.find((day) => day.dayKey === selectedForecastDay) || null,
-    [forecastDays, selectedForecastDay]
+    () => forecastDays.find((day) => day.dayKey === effectiveSelectedForecastDay) || null,
+    [effectiveSelectedForecastDay, forecastDays]
   );
 
   const visibleBestWindow24h = useMemo(() => {
@@ -460,7 +451,7 @@ export default function HomePage() {
                     type="button"
                     onClick={() => setSelectedForecastDay(day.dayKey)}
                     className={`rounded-lg px-3 py-2 text-left text-sm ${
-                      day.dayKey === selectedForecastDay
+                      day.dayKey === effectiveSelectedForecastDay
                         ? "bg-slate-900 text-white"
                         : "bg-slate-800 text-slate-300 hover:bg-slate-600"
                     }`}

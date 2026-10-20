@@ -50,17 +50,21 @@ export function useGeocodeSearch({ onPlaceSearchStart }: UseGeocodeSearchParams)
     };
 
     if (isSameAreaQuery(trimmedQuery, selectedArea)) {
-      setPlaceLoading(false);
-      setSearchError(null);
       firstResultMeasureRef.current = null;
-      return;
+      const clearTimer = window.setTimeout(() => {
+        setPlaceLoading(false);
+        setSearchError(null);
+      }, 0);
+      return () => window.clearTimeout(clearTimer);
     }
 
     if (trimmedQuery.length < 2) {
-      setResults([]);
-      setPlaceLoading(false);
       firstResultMeasureRef.current = null;
-      return;
+      const clearTimer = window.setTimeout(() => {
+        setResults([]);
+        setPlaceLoading(false);
+      }, 0);
+      return () => window.clearTimeout(clearTimer);
     }
 
     onPlaceSearchStart?.();
