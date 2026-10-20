@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "download:weather-symbols": "python scripts/download_weather_symbols.py"
+    "download:weather-symbols": "python scripts/download_weather_symbols.py",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -26,6 +28,8 @@
     "postcss": "8.5.30",
     "tailwindcss": "4.3.3",
     "typescript": "5.8.2",
-    "@tailwindcss/postcss": "4.3.3"
+    "@tailwindcss/postcss": "4.3.3",
+    "vitest": "4.0.3",
+    "@playwright/test": "1.56.0"
   }
 }
