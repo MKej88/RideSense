@@ -46,9 +46,12 @@ describe("GET /api/weather", () => {
   });
 
   it("gir 502 dersom ekstern værleverandør feiler", async () => {
-    mockedForecast.mockRejectedValue(new Error("MET er utilgjengelig"));
+    mockedForecast.mockImplementationOnce(async () => {
+      throw new Error("MET API svarte ikke");
+    });
     const response = await getWeather(request("/api/weather?lat=67.28&lon=14.4"));
     expect(response.status).toBe(502);
+    expect((await response.json()).error.code).toBe("EKSTERN_TJENESTE_FEIL");
   });
 });
 
