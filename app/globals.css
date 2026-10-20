@@ -11,7 +11,7 @@ body {
 
 @layer components {
   .rs-surface {
-    @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-sm;
+    @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-xs;
   }
 
   .rs-section-shell {
