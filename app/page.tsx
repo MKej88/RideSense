@@ -28,7 +28,7 @@ const LocationMap = dynamic(
   () => import("@/components/LocationMap").then((module) => module.LocationMap),
   {
     loading: () => (
-      <section className="rounded-xl bg-slate-900 p-4 text-slate-400 shadow-sm">Laster kart …</section>
+      <section className="rounded-xl bg-slate-900 p-4 text-slate-400 shadow-xs">Laster kart …</section>
     ),
     ssr: false
   }
@@ -254,7 +254,7 @@ export default function HomePage() {
 
           <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={searchPlace}>
             <input
-              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none"
+              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-hidden"
               placeholder="Søk sted i Norge"
               value={query}
               onChange={(event) => {
@@ -354,7 +354,7 @@ export default function HomePage() {
       )}
 
       {weatherLoading && (
-        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-sm">Laster data …</section>
+        <section className="rounded-xl bg-slate-900 p-6 text-slate-400 shadow-xs">Laster data …</section>
       )}
 
       {weather && (
@@ -368,7 +368,7 @@ export default function HomePage() {
                 onClick={() => setForecastRange("24h")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "24h"
-                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-xs"
                     : "text-slate-300"
                 }`}
               >
@@ -379,7 +379,7 @@ export default function HomePage() {
                 onClick={() => setForecastRange("7d")}
                 className={`rounded-md px-3 py-1.5 text-sm ${
                   forecastRange === "7d"
-                    ? "bg-slate-900 font-medium text-slate-100 shadow-sm"
+                    ? "bg-slate-900 font-medium text-slate-100 shadow-xs"
                     : "text-slate-300"
                 }`}
               >
@@ -443,7 +443,7 @@ export default function HomePage() {
           </div>
 
           {forecastRange === "7d" && forecastDays.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-xs">
               <div className="flex min-w-max gap-2">
                 {forecastDays.map((day) => (
                   <button
