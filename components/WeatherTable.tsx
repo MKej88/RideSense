@@ -120,7 +120,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Vind</dt>
                   <dd
-                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                    className={`rounded-sm px-2 py-0.5 text-right font-medium ${
                       hasHighWind
                         ? "border border-orange-500/60 bg-orange-500/20 text-orange-100"
                         : ""
@@ -132,7 +132,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Nedbør</dt>
                   <dd
-                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                    className={`rounded-sm px-2 py-0.5 text-right font-medium ${
                       hasHighPrecipitation
                         ? "border border-cyan-500/60 bg-cyan-500/20 text-cyan-100"
                         : ""
@@ -144,7 +144,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Vindkast</dt>
                   <dd
-                    className={`rounded px-2 py-0.5 text-right font-medium ${
+                    className={`rounded-sm px-2 py-0.5 text-right font-medium ${
                       hasDangerousWindGust
                         ? "border border-rose-500/70 bg-rose-500/20 text-rose-100"
                         : ""
@@ -202,7 +202,7 @@ export function WeatherTable({ hours }: { hours: ScoredWeatherHour[] }) {
         })}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-sm lg:block">
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-xs lg:block">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-800 text-left text-slate-300">
             <tr>
