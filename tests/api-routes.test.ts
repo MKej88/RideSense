@@ -24,7 +24,7 @@ describe("GET /api/weather", () => {
   ])("gir 400 ved ugyldige koordinater: %s", async url => {
     const response = await getWeather(request(url));
     expect(response.status).toBe(400);
-    expect((await response.json()).code).toBeDefined();
+    expect((await response.json()).error.code).toBe("UGYLDIG_INPUT");
     expect(mockedForecast).not.toHaveBeenCalled();
   });
 
