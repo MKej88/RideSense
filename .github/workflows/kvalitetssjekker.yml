@@ -57,5 +57,41 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      - name: Vitest (værlogikk og API-ruter)
+        run: npm test
+
       - name: Produksjonsbygg (Next.js)
         run: npm run build
+
+  browser-smoke:
+    name: Playwright (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Hent kode
+        uses: actions/checkout@v7
+      - name: Sett opp Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Installer npm-pakker
+        run: npm ci
+      - name: Installer Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Bygg Next.js
+        run: npm run build
+      - name: Test webapp med simulert vær-API
+        run: npm run test:e2e
+      - name: Last opp feilsøkingsspor ved feil
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-feilsoking
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
