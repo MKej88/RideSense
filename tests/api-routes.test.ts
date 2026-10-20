@@ -30,7 +30,7 @@ describe("GET /api/weather", () => {
 
   it("returnerer data og riktig cache-kontroll for vanlig forespørsel", async () => {
     const body = { locationLabel: "Bodø", hours: [] };
-    mockedForecast.mockResolvedValue(body as Awaited<ReturnType<typeof fetchForecastForLocation>>);
+    mockedForecast.mockResolvedValue(body as unknown as Awaited<ReturnType<typeof fetchForecastForLocation>>);
     const response = await getWeather(request("/api/weather?lat=67.28&lon=14.4&label=Bod%C3%B8"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(body);
@@ -39,7 +39,7 @@ describe("GET /api/weather", () => {
   });
 
   it("bruker no-store ved eksplisitt oppdatering", async () => {
-    mockedForecast.mockResolvedValue({ hours: [] } as Awaited<ReturnType<typeof fetchForecastForLocation>>);
+    mockedForecast.mockResolvedValue({ hours: [] } as unknown as Awaited<ReturnType<typeof fetchForecastForLocation>>);
     const response = await getWeather(request("/api/weather?lat=0&lon=0&refresh=1"));
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(mockedForecast).toHaveBeenCalledWith(0, 0, "Valgt sted", true);
