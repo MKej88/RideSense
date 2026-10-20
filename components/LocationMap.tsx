@@ -20,7 +20,7 @@ function LocationMapFallback({
   isError?: boolean;
 }): ReactElement {
   return (
-    <section className="rounded-xl bg-slate-900 p-4 shadow-sm">
+    <section className="rounded-xl bg-slate-900 p-4 shadow-xs">
       <h3 className="text-base font-semibold text-slate-100">Kart</h3>
       <div
         className={`mt-3 flex h-72 w-full items-center justify-center rounded-lg border p-4 text-sm md:h-96 ${

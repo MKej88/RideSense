@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #F8FAFC;
+}
 
 body {
   background: linear-gradient(180deg, #020617 0%, #020b1b 52%, #01040d 100%);
@@ -9,7 +11,7 @@ body {
 
 @layer components {
   .rs-surface {
-    @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-sm;
+    @apply rounded-xl border border-slate-700 bg-slate-900/90 shadow-xs;
   }
 
   .rs-section-shell {

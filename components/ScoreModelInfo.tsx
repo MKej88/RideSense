@@ -4,7 +4,7 @@ export function ScoreModelInfo() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <section className="rounded-xl border border-cyan-300/25 bg-slate-900 p-4 text-slate-200 shadow-sm">
+    <section className="rounded-xl border border-cyan-300/25 bg-slate-900 p-4 text-slate-200 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-cyan-100">Slik fungerer værscoren</h3>
         <button
